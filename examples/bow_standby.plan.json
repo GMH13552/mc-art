@@ -1,0 +1,307 @@
+{
+  "request": {
+    "query": "一把待机状态的水晶弓：半透明淡蓝水晶弓身，冷色高光，弓弦松弛，深色描边，背景透明。",
+    "form": "item",
+    "name": "bow_standby",
+    "namespace": "demo",
+    "width": 16,
+    "height": 16,
+    "novelty": 0.6,
+    "target_path": null,
+    "shape_policy": "planned",
+    "seed": 0,
+    "pack_format": 15
+  },
+  "descriptor": {
+    "target": "idle crystal bow",
+    "semantic": "A 16x16 idle Minecraft bow carved from translucent pale-blue crystal, with a slack cord.",
+    "visual_identity": [
+      "16x16 item sprite on a transparent background",
+      "bow body silhouette identical to vanilla bow_standby",
+      "translucent pale-blue crystal with a cold internal gradient",
+      "slack pale cord running straight between the limb tips"
+    ],
+    "parts": [
+      {
+        "id": "bow_body",
+        "meaning": "the whole curved crystal limb",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": [
+          "curved limb",
+          "crystal arc"
+        ],
+        "contour_intent": "elongated"
+      },
+      {
+        "id": "bowstring",
+        "meaning": "the slack cord spanning the limb tips",
+        "required": true,
+        "paint_only": false,
+        "layer": 1,
+        "style_role": "separate cord",
+        "recognition_terms": [
+          "cord",
+          "string"
+        ],
+        "contour_intent": "elongated"
+      }
+    ],
+    "negative_identities": [
+      "wooden bow",
+      "drawn string",
+      "arrow"
+    ],
+    "orientation": "centered broad side view",
+    "reference_strategy": "Keep the bow_standby silhouette exactly; recolour the limb into translucent crystal and the cord into a pale slack line.",
+    "shape_edit_mode": "appearance_only",
+    "reference_part_map": null,
+    "target_part_map": null
+  },
+  "geometry": {
+    "width": 16,
+    "height": 16,
+    "parts": [
+      {
+        "id": "bow_body",
+        "meaning": "the whole curved crystal limb",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": [
+          "curved limb"
+        ],
+        "contour_intent": "elongated"
+      },
+      {
+        "id": "bowstring",
+        "meaning": "the slack cord",
+        "required": true,
+        "paint_only": false,
+        "layer": 1,
+        "style_role": "separate cord",
+        "recognition_terms": [
+          "cord"
+        ],
+        "contour_intent": "elongated"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "body_mask",
+        "part_id": "bow_body",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [
+            0,
+            0
+          ],
+          "marker": "X",
+          "rows": [
+            "................",
+            "...........XXXX.",
+            "........XXXXXXXX",
+            "......XXXXXXXXX.",
+            ".....XXXXXX.....",
+            "....XXXX........",
+            "...XXXX.........",
+            "...XXX..........",
+            "..XXX...........",
+            "..XXX...........",
+            "..XXX...........",
+            ".XXX............",
+            ".XXX............",
+            ".XXX............",
+            ".XXX............",
+            "..X............."
+          ]
+        },
+        "layer": 0
+      },
+      {
+        "id": "string_mask",
+        "part_id": "bowstring",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [
+            0,
+            0
+          ],
+          "marker": "X",
+          "rows": [
+            "................",
+            "................",
+            "................",
+            "................",
+            ".............X..",
+            "............X...",
+            "...........X....",
+            "..........X.....",
+            ".........X......",
+            "........X.......",
+            ".......X........",
+            "......X.........",
+            ".....X..........",
+            "....X...........",
+            "................",
+            "................"
+          ]
+        },
+        "layer": 1
+      }
+    ],
+    "connections": [],
+    "constraints": [],
+    "uv_regions": [],
+    "background_transparent": true
+  },
+  "appearance": {
+    "palette": {
+      "crystal_deep": "#1E4A6B",
+      "crystal_dark": "#3E7FA8",
+      "crystal_mid": "#6FBBD8",
+      "crystal_light": "#A9E3F2",
+      "crystal_pale": "#E4F7FC",
+      "crystal_white": "#FFFFFF",
+      "cord_shadow": "#7C8A99",
+      "cord": "#C9D6E2"
+    },
+    "parts": {
+      "bow_body": {
+        "colors": [
+          "crystal_deep",
+          "crystal_dark",
+          "crystal_mid",
+          "crystal_light",
+          "crystal_pale"
+        ],
+        "material": "crystal",
+        "shade_axis": "top_left_to_bottom_right",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": []
+      },
+      "bowstring": {
+        "colors": [
+          "cord_shadow",
+          "cord"
+        ],
+        "material": "cord",
+        "shade_axis": "none",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": []
+      }
+    },
+    "outline_color": null,
+    "outline_width": 0,
+    "transparent_background": true,
+    "reference_sampling": "pattern",
+    "region_rules": [],
+    "part_reference_sampling": {
+      "bow_body": "value",
+      "bowstring": "value"
+    },
+    "part_reference_sources": {
+      "bow_body": "bow:bow_standby",
+      "bowstring": "bow:bow_standby"
+    },
+    "part_reference_composite": {},
+    "motif_policy": "model_authored",
+    "pixel_map": {
+      "legend": {
+        "p": "crystal_pale",
+        "w": "crystal_white"
+      },
+      "rows": [
+        "................",
+        "................",
+        "...........w....",
+        "................",
+        ".....p..........",
+        "................",
+        "....p...........",
+        "................",
+        "................",
+        "................",
+        "..p.............",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
+    }
+  },
+  "references": [
+    {
+      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/84/84bf48b16dadceeaca93c9645acc5be1a40db8623b0ede1375644e1bd4993c36.png",
+      "name": "bow:bow_pulling_0",
+      "roles": [
+        "scale"
+      ],
+      "notes": [
+        "group=minecraft:item/bow",
+        "member=1/4",
+        "family_member=bow_pulling_0",
+        "shape_authority=context only; another state of the same object, not this request's silhouette"
+      ]
+    },
+    {
+      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/f7/f7e5e9ef23b6c9b39e4675fc4326df92b66d45bb0a64dc4852c1fd031ff2b0b4.png",
+      "name": "bow:bow_pulling_1",
+      "roles": [
+        "scale"
+      ],
+      "notes": [
+        "group=minecraft:item/bow",
+        "member=2/4",
+        "family_member=bow_pulling_1",
+        "shape_authority=context only; another state of the same object, not this request's silhouette"
+      ]
+    },
+    {
+      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/77/778090baec36ae4eb2071b0eab425c18f0ded8316b23100842b7c818119d93ea.png",
+      "name": "bow:bow_pulling_2",
+      "roles": [
+        "scale"
+      ],
+      "notes": [
+        "group=minecraft:item/bow",
+        "member=3/4",
+        "family_member=bow_pulling_2",
+        "shape_authority=context only; another state of the same object, not this request's silhouette"
+      ]
+    },
+    {
+      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/6f/6f62b5a5eac576af20f1ddd79e69df37b19a036691aa26b7523753f995e3dd8d.png",
+      "name": "bow:bow_standby",
+      "roles": [
+        "scale",
+        "shape"
+      ],
+      "notes": [
+        "group=minecraft:item/bow",
+        "member=4/4",
+        "family_member=bow_standby",
+        "shape_authority=this request; copy this silhouette"
+      ]
+    },
+    {
+      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/ec/ec0361a55151be9ceef9f2cd3cb1375effa79a2f3bfdd95247be25b4d6c448ec.png",
+      "name": "string",
+      "roles": [
+        "material",
+        "palette"
+      ],
+      "notes": [
+        "group=minecraft:item/string",
+        "member=1/1",
+        "shape_authority=context only; another state of the same object, not this request's silhouette"
+      ]
+    }
+  ]
+}

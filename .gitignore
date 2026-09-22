@@ -1,0 +1,9 @@
+# Materialised reference textures. Rebuild with:
+#   bin/mc-art evidence --source <jar> --name <asset>
+# Content-addressed, so the same jar reproduces the same blob paths.
+references/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/

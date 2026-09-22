@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# mc-art: the deterministic engine of this skill. No model, no credentials.
+#
+#   mc-art list-groups --source <jar> [--filter bow]
+#   mc-art evidence    --source <jar> --name bow [--member bow_standby]
+#   mc-art render      --plan my.plan.json --out outputs/mine
+#   mc-art measure     a.png b.png c.png [--baseline src.png]
+#
+# Every command takes --source explicitly; nothing here assumes a Minecraft
+# install path.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$HERE"
+exec python3 -m mc_art "$@"
