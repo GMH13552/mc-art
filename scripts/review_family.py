@@ -1,7 +1,7 @@
 """Review one generated family: contour per frame, then frame coherence.
 
 Usage:
-    python3 review_family.py /home/gmh/mc-art/outputs/<run>/family.json
+    python3 review_family.py <run>/family.json
 
 Self-contained (Pillow only). It reads the family's own reports rather than
 guessing paths:

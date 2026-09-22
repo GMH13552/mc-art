@@ -127,7 +127,10 @@ Fix before reporting, and say what you changed.
 
 ## Legacy
 
-`/home/gmh/mc-art` still holds the old API pipeline. It is worth keeping only
-as a source of plans to learn the schema from, and as a baseline: its vision
-"blind reviewer" misread a 16x16 bow as *trident* and a clock as *music disc*,
-and its repair loops burned ten calls per member chasing that noise.
+The predecessor pipeline, which drove its own model calls for routing,
+planning, drawing and review, is archived at
+https://github.com/GMH13552/mc-art-pipeline. Consult it as a baseline and as a
+source of plan examples, not as a dependency: its vision "blind reviewer" read
+a 16x16 bow as *trident* and a clock as *music disc*, its repair loops burned
+about ten calls per member chasing that noise, and two family members were lost
+to a reasoning budget that exhausted the completion before any output.
