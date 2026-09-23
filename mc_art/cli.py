@@ -226,6 +226,57 @@ def _pack(args: argparse.Namespace) -> int:
     return 0
 
 
+def _layouts(args: argparse.Namespace) -> int:
+    """Which entity shapes already exist, so one can be found rather than invented."""
+    from .uv_tools import list_layouts
+
+    found = list_layouts(args.root)
+    if args.json:
+        print(json.dumps(found, ensure_ascii=False, indent=2))
+        return 0
+    if not found:
+        print("no layouts in %s" % (args.root or "layouts/"))
+        return 1
+    for entry in found:
+        print("%s  %sx%s  %d box(es)" % (
+            entry["name"], entry["canvas"][0], entry["canvas"][1], entry["boxes"]))
+        print("    parts: %s" % ", ".join(entry["parts"]))
+        if entry["notes"]:
+            print("    %s" % entry["notes"])
+        print("    %s" % entry["path"])
+    print()
+    print("No shape that fits? Author one:  mc-art boxes --spec boxes.json --out my_layout.json")
+    return 0
+
+
+def _boxes(args: argparse.Namespace) -> int:
+    """Derive a UV layout from a box decomposition the caller wrote."""
+    import json as _json
+
+    from .uv_tools import layout_from_boxes
+
+    spec = _json.loads(Path(args.spec).read_text(encoding="utf-8"))
+    result = layout_from_boxes(spec, args.out, canvas_width=args.canvas, margin=args.margin)
+    print("LAYOUT -> %s" % result["layout"])
+    print("CANVAS -> %sx%s" % (result["canvas"][0], result["canvas"][1]))
+    print("BOXES  -> %d  parts: %s" % (len(result["boxes"]), ", ".join(result["parts"])))
+    print("REGIONS -> %d" % result["regions"])
+    print("NEXT -> mc-art uv --layout %s --texture <atlas.png> --out <dir>" % result["layout"])
+    return 0
+
+
+def _uv(args: argparse.Namespace) -> int:
+    """Render an entity atlas against its layout so it can actually be seen."""
+    from .uv_tools import render_views
+
+    result = render_views(args.layout, args.texture, args.out, scale=args.scale)
+    for key, value in result["views"].items():
+        print("%-14s %s" % (key.upper(), value))
+    if any(key.endswith("_error") for key in result["views"]):
+        print("one preview could not be built; the uvmap alone still shows the region ownership")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mc_art",
@@ -268,6 +319,25 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--out", required=True)
     render.add_argument("--no-package", action="store_true")
     render.set_defaults(handler=_render)
+
+    layouts = sub.add_parser("layouts", help="list the shipped entity UV layouts so one can be found, not invented")
+    layouts.add_argument("--root", help="layouts directory; defaults to the one shipped with this skill")
+    layouts.add_argument("--json", action="store_true")
+    layouts.set_defaults(handler=_layouts)
+
+    boxes = sub.add_parser("boxes", help="derive a UV layout from a box decomposition you wrote")
+    boxes.add_argument("--spec", required=True, help="JSON: {boxes:[{id,part_id,size:[w,h,d],origin:[x,y,z]}]}")
+    boxes.add_argument("--out", required=True, help="where to write the layout JSON")
+    boxes.add_argument("--canvas", type=int, help="force an atlas width; default grows to fit")
+    boxes.add_argument("--margin", type=int, default=0, help="blank rows between shelves")
+    boxes.set_defaults(handler=_boxes)
+
+    uv = sub.add_parser("uv", help="render an entity atlas against its layout: annotated map + previews")
+    uv.add_argument("--layout", required=True)
+    uv.add_argument("--texture", required=True)
+    uv.add_argument("--out", required=True)
+    uv.add_argument("--scale", type=int, default=8)
+    uv.set_defaults(handler=_uv)
 
     pack = sub.add_parser("pack", help="assemble several textures into one face-correct resource pack")
     pack.add_argument("--manifest", required=True, help="JSON naming the textures and declaring each block model")

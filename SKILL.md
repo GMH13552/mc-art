@@ -48,6 +48,11 @@ $M render --plan my.plan.json --out outputs/mine
 #
 # 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
 #    $M pack --manifest pack.json --out pack/     see "Traps" #3
+#
+# 7. For an entity: find its box unwrap, or author one, then render it
+#    $M layouts
+#    $M boxes --spec boxes.json --out my_layout.json
+#    $M uv --layout my_layout.json --texture atlas.png --out out/
 ```
 
 Step 4 takes about a second and needs no credentials. Iterate as long as the
@@ -175,6 +180,89 @@ agreement. Also confirm, per asset:
 - **an accent budget** — decide how many pixels may carry the signature colour
   (blood, glow) and compare every asset against it;
 - **hue spread** across the wood family — one narrow band, not several.
+
+## Entity UV: find the shape, or author one, then look at it
+
+An entity atlas is a box unwrap. Do not guess one — and do not bypass the
+engine, which is what a live slime run did before these three commands
+existed.
+
+```bash
+# 1. FIND — the shapes that already ship, with their parts and faces
+$M layouts
+
+# 2. AUTHOR — when nothing fits, state the object as axis-aligned boxes
+$M boxes --spec boxes.json --out my_layout.json
+
+# 3. LOOK — the annotated atlas plus two previews
+$M uv --layout my_layout.json --texture atlas.png --out out/
+```
+
+`boxes.json` is the object, not a template — one entry per physical part:
+
+```json
+{ "boxes": [ { "id": "shell", "part_id": "shell", "size": [16, 16, 16] } ] }
+```
+
+A 16-cube unwraps to the canonical **64x32**, which is exactly what a slime
+needs; a cow or a biped gets its offsets from the shipped layouts instead. The
+shelf packer never overlaps two boxes, and the canvas grows to fit.
+
+`uv` writes three things, and the first is the one that matters when you are
+authoring by hand:
+
+- **`<name>_uvmap.png`** — the atlas at 8x with every region boxed, named and
+  given its bbox. Without it an entity atlas is mostly empty canvas and you are
+  guessing which cells belong to which part.
+- **`<name>_front.png`** — orthographic front view.
+- **`<name>_layers.png`** — the faces separated, so overlaps are visible.
+
+Two traps specific to entity work:
+
+- **`pixel_map` is opaque.** A translucent shell (a slime) cannot be expressed
+  through it. Set alpha explicitly and give the renderer an alpha authority:
+  a reference raster that already carries the transparency you want.
+- **A preview is not the game.** The isometric projector flattens a 16x16 top
+  face into a 32x16 rhombus, so one texel becomes a 2:1 parallelogram. Geometry
+  is correct; it just is not what you will see in the world. Use the previews to
+  check face ownership and shape, not final appearance.
+
+## Art literacy: where the eye is allowed to go
+
+Learned the expensive way, over three rounds of "make the stone quieter".
+
+**1. Accent is a budget, granted by role.** A live flesh-biome set put
+eye-catching pustules and bright blood lines on *ordinary stone*; the user's
+reaction was that mining a backpack of it would be exhausting. The rule that
+settled it:
+
+| block | grain | colour | accent pixels |
+|---|---|---|---|
+| ordinary stone | 1px fine | dark, desaturated, in family | **0** |
+| soil / dirt | coarse + debris | brighter, more saturated | a few |
+| ore | inherits the stone base | — | the bright cluster, and the only one |
+
+Assert it rather than intend it: count accent pixels per sprite and check the
+plain blocks are at zero. That check is what keeps "quiet" from drifting back.
+
+**2. A block's hue belongs to its biome, not to its source texture.** Grey
+stone among red blocks reads as a hole in the terrain, however good the vanilla
+grey was. Re-derive the family from the biome and let the source supply only
+structure (grain, mottling).
+
+**3. Separate by structure, not only by hue.** Two blocks told apart by
+shade alone will be confused. Declare the axis you are separating on —
+particle size, saturation, value — and keep it consistent: stone got 1px fine
+grain and ended darker and less saturated than the soil, so the two cannot be
+mistaken even in a screenshot.
+
+**4. When a check fails, add content — do not loosen the check.** Three assets
+failed a "every block bleeds somewhere" rule. The fix that shipped added the
+blood to those three, not an exemption to the rule.
+
+**5. Ask for the render before believing the plan.** Two separate rounds ended
+with the user saying the result did not look like what the numbers said. The
+sprite is the evidence, and a preview that flatters it is worse than none.
 
 ## Invariants
 
