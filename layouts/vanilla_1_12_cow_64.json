@@ -13,7 +13,14 @@
       "width": 8,
       "height": 8,
       "depth": 6,
-      "preview_instances": [[1, 5, 10, 8]],
+      "preview_instances": [
+        [
+          10,
+          0,
+          8,
+          8
+        ]
+      ],
       "preview_layer": 4,
       "notes": "ModelCow head.addBox(-4,-4,-6,8,8,6)"
     },
@@ -25,7 +32,14 @@
       "width": 1,
       "height": 3,
       "depth": 1,
-      "preview_instances": [[2, 3, 1, 3]],
+      "preview_instances": [
+        [
+          11,
+          -3,
+          1,
+          3
+        ]
+      ],
       "preview_layer": 5,
       "notes": "ModelCow horn1.addBox(-4,-5,-4,1,3,1)"
     },
@@ -37,7 +51,14 @@
       "width": 1,
       "height": 3,
       "depth": 1,
-      "preview_instances": [[10, 3, 1, 3]],
+      "preview_instances": [
+        [
+          16,
+          -3,
+          1,
+          3
+        ]
+      ],
       "preview_layer": 5,
       "notes": "ModelCow horn2.addBox(3,-5,-4,1,3,1); shares horn UV"
     },
@@ -49,7 +70,14 @@
       "width": 12,
       "height": 18,
       "depth": 10,
-      "preview_instances": [[10, 8, 20, 14]],
+      "preview_instances": [
+        [
+          8,
+          8,
+          12,
+          18
+        ]
+      ],
       "preview_layer": 1,
       "notes": "ModelCow body.addBox(-6,-10,-7,12,18,10)"
     },
@@ -61,7 +89,32 @@
       "width": 4,
       "height": 12,
       "depth": 4,
-      "preview_instances": [[11, 22, 4, 12], [16, 22, 4, 12], [21, 22, 4, 12], [26, 22, 4, 12]],
+      "preview_instances": [
+        [
+          6,
+          26,
+          4,
+          12
+        ],
+        [
+          10,
+          26,
+          4,
+          12
+        ],
+        [
+          14,
+          26,
+          4,
+          12
+        ],
+        [
+          18,
+          26,
+          4,
+          12
+        ]
+      ],
       "preview_layer": 0,
       "notes": "ModelQuadruped four legs share UV; side diagnostic shows four thick support columns"
     },
@@ -73,7 +126,14 @@
       "width": 4,
       "height": 6,
       "depth": 2,
-      "preview_instances": [[18, 20, 4, 6]],
+      "preview_instances": [
+        [
+          12,
+          16,
+          4,
+          6
+        ]
+      ],
       "preview_layer": 2,
       "notes": "ModelCow udders.addBox(-2,-3,0,4,6,2), rotated below body"
     }

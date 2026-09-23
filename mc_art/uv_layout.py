@@ -128,13 +128,22 @@ def layout_summary(regions: list[UvRegionSpec]) -> dict[str, Any]:
     return {"region_count": len(regions), "parts": by_part}
 
 
+def _preview_instances(region: Any) -> list[tuple[int, int]]:
+    """Where a part sits in the preview; its size comes from the face itself."""
+    if region.preview_instances is not None:
+        return [(int(item[0]), int(item[1])) for item in region.preview_instances]
+    origin = region.preview_origin
+    return [(int(origin[0]), int(origin[1]))]
+
+
 def render_front_preview(texture: Any, regions: list[UvRegionSpec], scale: int = 8) -> Any:
     """Render declared front faces into a generic model-facing preview.
 
-    This is a diagnostic view, not a replacement renderer: it requires layouts
-    to provide `preview_origin` (and optionally `preview_size`) for front faces.
-    The same function can therefore preview any cube-UV model without knowing
-    whether it is a villager, machine, animal or custom entity.
+    Every face is drawn at its own pixel size. A layout's preview metadata says
+    WHERE a part sits, not how big to draw it; it used to do both, and two
+    shipped layouts stretched an 8x8 head into 10x8 and a 12x18 body into 20x14.
+    A preview that misstates the model's proportions is worse than none, which
+    is exactly how a user came to ask why the parts did not line up.
     """
     from PIL import Image
 
@@ -145,41 +154,32 @@ def render_front_preview(texture: Any, regions: list[UvRegionSpec], scale: int =
         if region.face == "front" and (region.preview_origin is not None or region.preview_instances is not None)
     ]
     if not front:
-        raise ValueError("UV layout has no front regions with preview_origin metadata")
-    bounds = []
+        raise ValueError("UV layout has no front regions with preview metadata")
+    source = texture.convert("RGBA")
+    placements: list[tuple[int, Image.Image, int, int]] = []
+    bounds: list[tuple[int, int, int, int]] = []
     for region in front:
-        instances = region.preview_instances
-        if instances is None:
-            origin = region.preview_origin
-            size = region.preview_size or [region.bbox[2] - region.bbox[0], region.bbox[3] - region.bbox[1]]
-            instances = [[origin[0], origin[1], size[0], size[1]]]
-        bounds.extend((item[0], item[1], item[0] + item[2], item[1] + item[3]) for item in instances)
+        face = source.crop(tuple(region.bbox))
+        for origin_x, origin_y in _preview_instances(region):
+            placements.append((region.preview_layer, face, origin_x, origin_y))
+            bounds.append((origin_x, origin_y, origin_x + face.width, origin_y + face.height))
     left = min(item[0] for item in bounds)
     top = min(item[1] for item in bounds)
     right = max(item[2] for item in bounds)
     bottom = max(item[3] for item in bounds)
     output = Image.new("RGBA", ((right - left) * scale, (bottom - top) * scale), (0, 0, 0, 0))
-    source = texture.convert("RGBA")
-    for region in sorted(front, key=lambda item: item.preview_layer):
-        instances = region.preview_instances
-        if instances is None:
-            origin = region.preview_origin
-            size = region.preview_size or [region.bbox[2] - region.bbox[0], region.bbox[3] - region.bbox[1]]
-            instances = [[origin[0], origin[1], size[0], size[1]]]
-        for origin_x, origin_y, size_x, size_y in instances:
-            crop = source.crop(tuple(region.bbox))
-            crop = crop.resize((size_x * scale, size_y * scale), Image.Resampling.NEAREST)
-            output.alpha_composite(crop, ((origin_x - left) * scale, (origin_y - top) * scale))
+    for _layer, face, origin_x, origin_y in sorted(placements, key=lambda item: item[0]):
+        enlarged = face.resize((face.width * scale, face.height * scale), Image.Resampling.NEAREST)
+        output.alpha_composite(enlarged, ((origin_x - left) * scale, (origin_y - top) * scale))
     return output
 
 
 def render_entity_preview(texture: Any, regions: list[UvRegionSpec], scale: int = 8) -> Any:
-    """Compose a compact orthographic/isometric entity diagnostic from an atlas.
+    """Compose a compact orthographic entity diagnostic from an atlas.
 
-    Entity textures are not readable as a flat 64x32 sheet. This renderer uses
-    each cube's declared front face plus its right and top faces, placing the
-    latter beside/above the front rectangle using the same preview instances.
-    It remains layout-driven and works for any legacy cube UV atlas; no cow,
+    Each part contributes its front face at its own size, with its side face
+    placed immediately to the right and its top face immediately above, all at
+    their natural pixel sizes. Layout-driven and object-agnostic: no cow,
     villager or player silhouette is embedded here.
     """
     from PIL import Image
@@ -192,31 +192,26 @@ def render_entity_preview(texture: Any, regions: list[UvRegionSpec], scale: int 
         by_part.setdefault(region.part_id, {})[region.face.lower()] = region
     placements: list[tuple[int, Image.Image, int, int]] = []
     bounds: list[tuple[int, int, int, int]] = []
-    for part_id, faces in by_part.items():
+    for faces in by_part.values():
         front = next((faces[name] for name in ("front", "north", "south") if name in faces), None)
         if front is None or (front.preview_origin is None and front.preview_instances is None):
             continue
-        instances = front.preview_instances
-        if instances is None:
-            origin = front.preview_origin
-            size = front.preview_size or [front.bbox[2] - front.bbox[0], front.bbox[3] - front.bbox[1]]
-            instances = [[origin[0], origin[1], size[0], size[1]]]
         side = next((faces[name] for name in ("right", "east", "left", "west") if name in faces), None)
         top = faces.get("top")
-        for origin_x, origin_y, size_x, size_y in instances:
-            front_image = source.crop(tuple(front.bbox)).resize((size_x * scale, size_y * scale), Image.Resampling.NEAREST)
+        front_image = source.crop(tuple(front.bbox))
+        side_image = source.crop(tuple(side.bbox)) if side is not None else None
+        top_image = source.crop(tuple(top.bbox)) if top is not None else None
+        for origin_x, origin_y in _preview_instances(front):
             placements.append((front.preview_layer + 2, front_image, origin_x, origin_y))
-            bounds.append((origin_x, origin_y, origin_x + size_x, origin_y + size_y))
-            if side is not None:
-                side_image = source.crop(tuple(side.bbox)).resize(((side.bbox[2] - side.bbox[0]) * scale, size_y * scale), Image.Resampling.NEAREST)
-                side_x = origin_x + size_x
+            bounds.append((origin_x, origin_y, origin_x + front_image.width, origin_y + front_image.height))
+            if side_image is not None:
+                side_x = origin_x + front_image.width
                 placements.append((front.preview_layer, side_image, side_x, origin_y))
-                bounds.append((side_x, origin_y, side_x + (side.bbox[2] - side.bbox[0]), origin_y + size_y))
-            if top is not None:
-                top_image = source.crop(tuple(top.bbox)).resize((size_x * scale, (top.bbox[3] - top.bbox[1]) * scale), Image.Resampling.NEAREST)
-                top_y = origin_y - (top.bbox[3] - top.bbox[1])
+                bounds.append((side_x, origin_y, side_x + side_image.width, origin_y + side_image.height))
+            if top_image is not None:
+                top_y = origin_y - top_image.height
                 placements.append((front.preview_layer + 1, top_image, origin_x, top_y))
-                bounds.append((origin_x, origin_y - (top.bbox[3] - top.bbox[1]), origin_x + size_x, origin_y))
+                bounds.append((origin_x, top_y, origin_x + top_image.width, origin_y))
     if not bounds:
         raise ValueError("UV layout has no front regions with preview metadata")
     left = min(item[0] for item in bounds)
@@ -225,7 +220,8 @@ def render_entity_preview(texture: Any, regions: list[UvRegionSpec], scale: int 
     bottom = max(item[3] for item in bounds)
     output = Image.new("RGBA", ((right - left) * scale, (bottom - top_bound) * scale), (0, 0, 0, 0))
     for _layer, image, x, y in sorted(placements, key=lambda item: item[0]):
-        output.alpha_composite(image, ((x - left) * scale, (y - top_bound) * scale))
+        enlarged = image.resize((image.width * scale, image.height * scale), Image.Resampling.NEAREST)
+        output.alpha_composite(enlarged, ((x - left) * scale, (y - top_bound) * scale))
     return output
 
 

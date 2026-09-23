@@ -217,6 +217,18 @@ authoring by hand:
 - **`<name>_front.png`** — orthographic front view.
 - **`<name>_layers.png`** — the faces separated, so overlaps are visible.
 
+The two previews are **schematics**: they place each cube's front face using
+the layout's own `preview_instances`, with its side and top beside and above it.
+Two shipped layouts carried coordinates sized for the wrong face — an 8x8 cow
+head drawn 10x8, a 12x18 body drawn 20x14 — so the parts did not join, which is
+exactly what a reader noticed before any measurement did. The renderers now
+draw every face at its own pixel size (the metadata says *where*, never *how
+big*), and a test asserts the shipped metadata agrees. If a preview still looks
+disconnected, the metadata is what to check, not the atlas.
+
+`<name>_uvmap.png` has no such dependency: it only draws the boxes the layout
+declares, so it is the one to trust when they disagree.
+
 Two traps specific to entity work:
 
 - **`pixel_map` is opaque.** A translucent shell (a slime) cannot be expressed

@@ -95,3 +95,53 @@ def test_a_layout_without_a_top_face_still_yields_the_map(tmp_path: Path) -> Non
     }), encoding="utf-8")
     result = render_views(layout, atlas, tmp_path / "out", scale=4)
     assert Path(result["views"]["uvmap"]).exists()
+
+
+def test_every_shipped_layout_states_a_truthful_preview_size() -> None:
+    """A preview instance says WHERE a part sits, not how big to draw it.
+
+    Two layouts stated the size as well and got it wrong: an 8x8 cow head was
+    drawn 10x8 and a 12x18 body 20x14, which is why the parts did not line up.
+    """
+    import json
+
+    layouts = Path(__file__).resolve().parents[1] / "layouts"
+    offenders = []
+    for path in sorted(layouts.glob("*.json")):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        for cube in raw.get("cubes") or []:
+            for item in cube.get("preview_instances") or []:
+                if (item[2], item[3]) != (cube["width"], cube["height"]):
+                    offenders.append("%s/%s %dx%d drawn %dx%d" % (
+                        path.stem, cube["id"], cube["width"], cube["height"], item[2], item[3]))
+    assert not offenders, offenders
+
+
+def test_the_front_preview_never_stretches_a_face(tmp_path: Path) -> None:
+    """A preview that misstates proportions is worse than no preview."""
+    from mc_art.uv_layout import render_front_preview
+
+    atlas = tmp_path / "atlas.png"
+    image = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    for y in range(0, 4):
+        for x in range(0, 4):
+            image.putpixel((x, y), (220, 40, 40, 255))
+    image.save(atlas, "PNG")
+    layout = tmp_path / "stretched.json"
+    layout.write_text(json.dumps({
+        "format": "mc-art-uv-layout/1",
+        "texture_width": 16, "texture_height": 16,
+        "regions": [{
+            "id": "block_front", "part_id": "block", "bbox": [0, 0, 4, 4], "face": "front",
+            "preview_instances": [[0, 0, 20, 4]],   # the lie: 4x4 asked for as 20x4
+        }],
+    }), encoding="utf-8")
+    from mc_art.planfile import uv_layout_from_file
+
+    with Image.open(atlas) as loaded:
+        rendered = render_front_preview(loaded.convert("RGBA"), uv_layout_from_file(layout), scale=1)
+    painted = [(x, y) for y in range(rendered.height) for x in range(rendered.width)
+               if rendered.getpixel((x, y))[3] >= 8]
+    xs = {x for x, _y in painted}
+    ys = {y for _x, y in painted}
+    assert (max(xs) - min(xs) + 1, max(ys) - min(ys) + 1) == (4, 4), "the face keeps its own size"
