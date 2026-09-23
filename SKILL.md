@@ -49,7 +49,8 @@ $M render --plan my.plan.json --out outputs/mine
 # 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
 #    $M pack --manifest pack.json --out pack/     see "Traps" #3
 #
-# 7. For an entity: read its box unwrap out of the model code, or author one
+# 7. For an entity: read its box unwrap out of the model code, or author one.
+#    No model yet? The layout you author IS the contract the Java must match.
 #    $M model --jar game.jar --texture textures/entity/sheep/sheep.png
 #    $M layouts
 #    $M boxes --spec boxes.json --out my_layout.json
@@ -226,6 +227,30 @@ Same texture offsets, different nets: `28x14` against `24x12` for the head,
 and the head draws four pixels too wide while the legs run six pixels proud of
 their frame. The `0.6`, `1.75` and `0.5` deltas inflate the *rendered* cube
 and never the net.
+
+**Whoever paints needs the model first — or the box list does.** A texture is
+not a free-standing drawing. It is a set of rectangles that only mean something
+once a model says which face reads which rectangle, so the two halves of the job
+are locked together. Both orders work; only one of them is free.
+
+- **The model already exists** — a vanilla mob, a reskin of one, or one the
+  modder has already written. Read it and paint into its net. A new cow variant
+  is a repaint, not a new layout; this is the cheap path, and it is why
+  `mc-art model` exists.
+- **No model yet.** Then the layout *is* the design decision, and the Java has
+  to honour it exactly. Author it with `mc-art boxes`, freeze the JSON, and
+  hand it to whoever writes the model: they build each box with those dimensions
+  and give its renderer that texture offset — `new ModelRenderer(this, u, v)`
+  then `addBox(x, y, z, w, h, d)`. The position arguments are theirs; they do not
+  touch the unwrap. What is pinned is `w,h,d` and `(u,v)`, because a box occupies
+  `2d + 2w` by `d + h` at that corner — which is the number
+  `mc-art boxes` just laid out for you.
+
+What you cannot do is paint freehand and hope. Every pixel of an entity atlas
+either belongs to a face of a box or to nothing — that is exactly what `uv`
+draws — and a pixel outside every box renders nowhere. So art may come first,
+but **the box list has to be frozen first**; it is the interface between the two
+halves of the job, cheap to write down and expensive to discover later.
 
 `boxes.json` is the object, not a template — one entry per physical part:
 
