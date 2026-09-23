@@ -41,11 +41,16 @@ __all__ = [
 ]
 
 _OP_RE = re.compile(r"^\s+(\d+):\s+(\S+)(?:\s+(.*))?$")
-_BOXFACE_SIGS = ("(FFFIIIF)V", "(FFFIII)Lbrs;", "(FFFIII)V")
-_ROT_SIG = "(FFF)V"
-_RENDERER_SIG = "(Lbqf;II)V"
-_OFFSET_SIGS = ("(II)Lbrs;", "(II)V")
-_SUPER_SIG = "(IF)V"
+# Signatures are matched by shape, not by the obfuscated class they belong to:
+# the names in a jar depend on the mapping it was built against, and a mod jar
+# brings its own. ModelRenderer.addBox is (FFFIIIF)V or (FFFIII)L<self>;,
+# setTextureOffset is (II)L<self>;, setRotationPoint is (FFF)V, the renderer
+# constructor is (L<ModelBase>;II)V and a model's super call is (IF)V.
+_RENDERER_RE = re.compile(r"^\(L[^;]+;II\)V$")
+_BOXFACE_RES = (re.compile(r"^\(FFFIIIF\)V$"), re.compile(r"^\(FFFIII\)L[^;]+;$"))
+_ROT_RE = re.compile(r"^\(FFF\)V$")
+_OFFSET_RE = re.compile(r"^\(II\)L[^;]+;$")
+_SUPER_RE = re.compile(r"^\(IF\)V$")
 _ARITH = ("iadd", "isub", "imul", "idiv", "fadd", "fsub", "fmul", "fdiv")
 
 
@@ -121,7 +126,7 @@ def _methods(text: str) -> dict[str, list[tuple[str, str]]]:
                 and "(" in stripped and stripped.endswith(";"):
             if cur:
                 out[cur] = atoms
-            cur = stripped.strip().split("(")[0].split()[-1]
+            cur = stripped.strip().split("(")[0].split()[-1].rsplit(".", 1)[-1]
             atoms = []
     if cur:
         out[cur] = atoms
@@ -184,7 +189,8 @@ def parse_constructor(text: str, cls: str, args: list[Any] | None = None):
     can hold several -- ModelCow attaches two horns with `setTextureOffset`),
     and its rotation point.
     """
-    ops = _methods(text).get(cls) or []
+    simple = cls.replace("/", ".").rsplit(".", 1)[-1]
+    ops = _methods(text).get(simple) or _methods(text).get(cls) or []
     recs: list[dict[str, Any]] = []
     field_of: dict[str, int] = {}
     stack: list[Any] = []
@@ -229,45 +235,62 @@ def parse_constructor(text: str, cls: str, args: list[Any] | None = None):
                 stack.append(_Unknown("cast"))
             elif op == "dup":
                 stack.append(stack[-1] if stack else _Unknown("dup"))
+            elif op == "dup_x1":
+                if len(stack) >= 2:
+                    first = stack.pop()
+                    second = stack.pop()
+                    stack.extend((first, second, first))
+            elif op == "dup_x2":
+                if len(stack) >= 3:
+                    first = stack.pop()
+                    second = stack.pop()
+                    third = stack.pop()
+                    stack.extend((first, third, second, first))
+            elif op == "dup2":
+                if len(stack) >= 2:
+                    top = stack.pop()
+                    below = stack.pop()
+                    stack.extend((below, top, below, top))
         elif kind == "call":
             owner, _name, sig = decoded[1], decoded[2], decoded[3]
-            if sig == _RENDERER_SIG:
+            if _RENDERER_RE.match(sig):
                 v, u = pop(), pop()
                 pop()
                 pop()
                 recs.append({"uv": (u, v), "boxes": [], "rot": None, "field": None})
                 stack.append(("ref", len(recs) - 1))
-            elif sig in _OFFSET_SIGS:
+            elif _OFFSET_RE.match(sig):
                 v, u = pop(), pop()
                 ref = pop()
                 if _is_ref(ref):
                     recs[ref[1]]["uv"] = (u, v)
-                if sig.endswith("Lbrs;"):
+                if sig.endswith(";"):
                     stack.append(ref)
-            elif sig in _BOXFACE_SIGS:
-                delta = pop() if sig == "(FFFIIIF)V" else 0.0
+            elif any(pattern.match(sig) for pattern in _BOXFACE_RES):
+                delta = pop() if sig.endswith("IIIF)V") else 0.0
                 d, h, w = pop(), pop(), pop()
                 z, y, x = pop(), pop(), pop()
                 ref = pop()
                 if _is_ref(ref):
                     u, v = recs[ref[1]]["uv"]
                     recs[ref[1]]["boxes"].append((u, v, x, y, z, w, h, d, delta))
-                if sig.endswith("Lbrs;"):
+                if sig.endswith(";"):
                     stack.append(ref)
-            elif sig == _ROT_SIG:
+            elif _ROT_RE.match(sig):
                 z, y, x = pop(), pop(), pop()
                 ref = pop()
                 if _is_ref(ref):
                     recs[ref[1]]["rot"] = (x, y, z)
-            elif sig == _SUPER_SIG:
+            elif _SUPER_RE.match(sig):
                 f, i = pop(), pop()
                 supercall = (owner, [i, f])
     return recs, supercall
 
 
 def _new_classes(text: str, cls: str) -> list[str]:
+    simple = cls.replace("/", ".").rsplit(".", 1)[-1]
     out: list[str] = []
-    for op, raw in (_methods(text).get(cls) or []):
+    for op, raw in (_methods(text).get(simple) or _methods(text).get(cls) or []):
         decoded = _decode(op, raw)
         if decoded and decoded[0] == "new" and decoded[1] not in out:
             out.append(decoded[1])
@@ -285,7 +308,7 @@ def resolve_model(source: Callable[[str], str], cls: str, args: list[Any] | None
     text = source(cls)
     recs, supercall = parse_constructor(text, cls, args)
     parts: dict[str, dict[str, Any]] = {}
-    if supercall and supercall[0] not in ("bqf",) and depth < 6:
+    if supercall and depth < 6:
         parts = resolve_model(source, supercall[0], supercall[1], depth + 1)
     for rec in recs:
         name = rec["field"]
@@ -363,27 +386,29 @@ class JarSource:
 
     # -- archive ---------------------------------------------------------
     def _class_bytes(self, name: str) -> bytes | None:
-        for candidate in (name + ".class",):
-            try:
-                return self._zip.read(candidate)
-            except KeyError:
-                continue
-        return None
+        entry = self._normalise(name).replace(".", "/") + ".class"
+        try:
+            return self._zip.read(entry)
+        except KeyError:
+            return None
 
     def _scan(self) -> list[tuple[str, bytes]]:
         if self._strings is None:
             found = []
             for entry in self._zip.namelist():
-                if not entry.endswith(".class") or "/" in entry:
-                    continue
-                found.append((entry[:-6], self._zip.read(entry)))
+                if entry.endswith(".class"):
+                    found.append((entry[:-6], self._zip.read(entry)))
             self._strings = found
         return self._strings
+
+    @staticmethod
+    def _normalise(cls: str) -> str:
+        return cls.replace("/", ".").strip(".")
 
     def texture_owners(self, relative: str) -> list[str]:
         """Every class whose constant pool mentions this texture path."""
         needle = relative.encode()
-        return [name for name, blob in self._scan() if needle in blob]
+        return [self._normalise(name) for name, blob in self._scan() if needle in blob]
 
     def texture_bytes(self, relative: str) -> bytes | None:
         """The raw bytes of a texture path, whichever namespace holds it."""
@@ -394,20 +419,23 @@ class JarSource:
 
     # -- class text ------------------------------------------------------
     def text(self, cls: str) -> str:
-        if cls in self._text:
-            return self._text[cls]
-        blob = self._class_bytes(cls)
+        name = self._normalise(cls)
+        if name in self._text:
+            return self._text[name]
+        blob = self._class_bytes(name)
         if blob is None:
-            raise KeyError("class %s is not in %s" % (cls, self.jar))
-        if cls not in self._written:
-            (self._tmp / (cls + ".class")).write_bytes(blob)
-            self._written.add(cls)
+            raise KeyError("class %s is not in %s" % (name, self.jar))
+        if name not in self._written:
+            target = self._tmp / (name.replace(".", "/") + ".class")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(blob)
+            self._written.add(name)
         result = subprocess.run(
-            ["javap", "-p", "-c", "-cp", str(self._tmp), cls],
+            ["javap", "-p", "-c", "-cp", str(self._tmp), name],
             capture_output=True, text=True)
         if result.returncode != 0:
             raise UnsupportedBytecode(result.stderr.strip() or ("javap failed on %s" % cls))
-        self._text[cls] = result.stdout
+        self._text[name] = result.stdout
         return result.stdout
 
     def close(self) -> None:
