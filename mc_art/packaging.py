@@ -48,7 +48,35 @@ def build_resourcepack(request: AssetRequest, sprite_path: Path, out_dir: Path,
     written.append(mcmeta)
     namespace = request.namespace
     name = request.name
-    if request.form in {AssetForm.ITEM, AssetForm.CROSS}:
+    if request.form == AssetForm.CROSS:
+        # A cross-form asset is a plant, not an item: saplings, flowers and
+        # crops live in block/cross with a blockstate. Packing one as
+        # textures/item + item/generated puts it somewhere the game will never
+        # look for a placed block, which is exactly what a live sapling run did.
+        block_name = name
+        texture = _safe_pack_path(
+            out_dir, Path("assets") / namespace / "textures" / "block" / (block_name + ".png"))
+        texture.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(sprite_path, texture)
+        model = _safe_pack_path(
+            out_dir, Path("assets") / namespace / "models" / "block" / (block_name + ".json"))
+        _write_json(
+            model,
+            {
+                "parent": "minecraft:block/cross",
+                "textures": {"cross": "%s:block/%s" % (namespace, block_name)},
+            },
+        )
+        blockstates = _safe_pack_path(
+            out_dir, Path("assets") / namespace / "blockstates" / (block_name + ".json"))
+        _write_json(blockstates, {"variants": {"": {"model": "%s:block/%s" % (namespace, block_name)}}})
+        # The inventory icon is a separate concern: it reuses the same sprite
+        # through the block model rather than duplicating the file.
+        item_model = _safe_pack_path(
+            out_dir, Path("assets") / namespace / "models" / "item" / (block_name + ".json"))
+        _write_json(item_model, {"parent": "%s:block/%s" % (namespace, block_name)})
+        written.extend([texture, model, blockstates, item_model])
+    elif request.form == AssetForm.ITEM:
         texture = _safe_pack_path(out_dir, Path("assets") / namespace / "textures" / "item" / (name + ".png"))
         model = _safe_pack_path(out_dir, Path("assets") / namespace / "models" / "item" / (name + ".json"))
         texture.parent.mkdir(parents=True, exist_ok=True)

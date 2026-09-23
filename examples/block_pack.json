@@ -1,0 +1,58 @@
+{
+  "namespace": "eyeballtree",
+  "pack_format": 15,
+  "description": "eyeball tree",
+  "textures": {
+    "eyeball_log": "out/eyeball_log/sprite.png",
+    "eyeball_log_top": "out/eyeball_log_top/sprite.png",
+    "eyeball_stripped_log": "out/eyeball_stripped_log/sprite.png",
+    "eyeball_stripped_log_top": "out/eyeball_stripped_log_top/sprite.png",
+    "eyeball_planks": "out/eyeball_planks/sprite.png",
+    "eyeball_leaves": "out/eyeball_leaves/sprite.png",
+    "eyeball_sapling": "out/eyeball_sapling/sprite.png"
+  },
+  "blocks": [
+    {
+      "name": "eyeball_log",
+      "model": "cube_column",
+      "faces": {
+        "end": "eyeball_log_top",
+        "side": "eyeball_log"
+      },
+      "item": true
+    },
+    {
+      "name": "eyeball_stripped_log",
+      "model": "cube_column",
+      "faces": {
+        "end": "eyeball_stripped_log_top",
+        "side": "eyeball_stripped_log"
+      },
+      "item": true
+    },
+    {
+      "name": "eyeball_planks",
+      "model": "cube_all",
+      "faces": {
+        "all": "eyeball_planks"
+      },
+      "item": true
+    },
+    {
+      "name": "eyeball_leaves",
+      "model": "cube_all",
+      "faces": {
+        "all": "eyeball_leaves"
+      },
+      "item": true
+    },
+    {
+      "name": "eyeball_sapling",
+      "model": "cross",
+      "faces": {
+        "cross": "eyeball_sapling"
+      },
+      "item": true
+    }
+  ]
+}

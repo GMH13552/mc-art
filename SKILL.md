@@ -45,6 +45,9 @@ $M evidence --source "$JAR" --name bow --member bow_standby
 $M render --plan my.plan.json --out outputs/mine
 
 # 5. LOOK at outputs/mine/sprite.png — then go back to 4
+#
+# 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
+#    $M pack --manifest pack.json --out pack/     see "Traps" #3
 ```
 
 Step 4 takes about a second and needs no credentials. Iterate as long as the
@@ -109,6 +112,69 @@ JSON, a previous run, or memory. Then answer:
 - **Failures** — anything that did not render: say what stage died and why.
 
 Fix before reporting, and say what you changed.
+
+## Traps that bit a real asset
+
+From a live eyeball-tree build (a log, a stripped log, planks, leaves, a
+sapling). Each one cost a round trip; none of them is object-specific.
+
+**1. `pattern` sampling copies saturated source pixels verbatim.** On a whole
+block face it pulled 50 of 256 pixels back as the source's own olive-browns,
+which read as dirt on a red tree. `pattern` is for keeping *grain*, and it
+keeps roughly 40% of the source colour to do it. When the target material is
+not the source material, either use `value` (brightness only) or write the
+value bands straight into the plan's `pixel_map` and keep the reference only
+as evidence. Recorded fix: the bands went into `pixel_map`, the reference
+stayed attached so `texture_audit.json` could still measure that the source's
+value rhythm survived.
+
+**2. A repeated pale accent along one line reads as a band.** Several
+`blood_pale` pixels adjacent on a 1px trickle turned it salmon pink. Along any
+one run of accent pixels, allow a single palest value; let the rest take the
+mid tone.
+
+**3. One plan is one texture. A block is often two.** A log needs an end-grain
+file *and* a side file. Building it one plan at a time can only produce
+`cube_all`, which is how a log ended up with its side texture on all six
+faces. Declare the faces instead:
+
+```json
+{ "namespace": "eyeballtree",
+  "textures": { "log": "out/log/sprite.png", "log_top": "out/log_top/sprite.png" },
+  "blocks": [ { "name": "eyeball_log", "model": "cube_column",
+                "faces": { "end": "log_top", "side": "log" }, "item": true } ] }
+```
+
+```bash
+M pack --manifest pack.json --out pack/
+```
+
+It writes the pack, a `FACE_MAP.txt` saying which texture lands on which face,
+and a preview that really separates them. A `cube_column` whose `end` equals
+its `side` is reported as a warning, because that is exactly what one plan per
+texture produces by accident.
+
+**4. The single-plan isometric preview is always `cube_all`.** It does not know
+a block has faces. Do not diagnose a face problem from it — read
+`FACE_MAP.txt` or the model JSON. A user once reported "your stripped log has
+the top face on all six sides"; the pack was correct and the preview was the
+liar.
+
+**5. Sibling assets share a cut face.** A stripped log's top is the *same cut*
+as the barked log's top with the outer ring planed off — not a different
+source tile. Measure it: the live pair came out 77% identical with every
+difference in the outermost ring and zero inside.
+
+**6. Check the family, not just the frames.** `measure` covers frame-to-frame
+agreement. Also confirm, per asset:
+
+- **palette adherence** — no pixel outside the family palette (count them; zero
+  is the target, and a stray source colour shows up here);
+- **material honesty** — no leaf pigment in wood, no bark in leaves, the
+  sapling's trunk drawn from the log's bark ramp;
+- **an accent budget** — decide how many pixels may carry the signature colour
+  (blood, glow) and compare every asset against it;
+- **hue spread** across the wood family — one narrow band, not several.
 
 ## Invariants
 

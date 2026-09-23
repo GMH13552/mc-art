@@ -202,6 +202,30 @@ def _measure(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pack(args: argparse.Namespace) -> int:
+    """Assemble a multi-texture asset: several plans, one face-correct pack.
+
+    One plan is one 16x16 texture. A log needs two -- end grain and side -- and
+    they are different files, so a pack built one plan at a time can only emit
+    cube_all. The manifest names the textures and declares the block model.
+    """
+    from .pack import build_pack
+
+    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    result = build_pack(manifest, args.out)
+    print("PACK -> %s" % result["pack"])
+    print("NAMESPACE -> %s" % result["namespace"])
+    print("TEXTURES -> %d" % len(result["textures"]))
+    for block in result["blocks"]:
+        print("  block %s" % block)
+    for warning in result["warnings"]:
+        print("  WARNING: %s" % warning)
+    for preview in result["previews"]:
+        print("  preview %s" % preview)
+    print("FACE MAP -> %s" % (Path(result["pack"]) / "FACE_MAP.txt"))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mc_art",
@@ -244,6 +268,11 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--out", required=True)
     render.add_argument("--no-package", action="store_true")
     render.set_defaults(handler=_render)
+
+    pack = sub.add_parser("pack", help="assemble several textures into one face-correct resource pack")
+    pack.add_argument("--manifest", required=True, help="JSON naming the textures and declaring each block model")
+    pack.add_argument("--out", required=True)
+    pack.set_defaults(handler=_pack)
 
     measure = sub.add_parser("measure", help="frame-to-frame agreement for a set of sprites")
     measure.add_argument("sprites", nargs="+")
