@@ -229,7 +229,7 @@ def _pack(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mc_art",
-        description="Deterministic Minecraft art engine: scan, evidence, render, measure.",
+        description="Deterministic Minecraft art engine: scan, evidence, render, pack, measure.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
