@@ -279,6 +279,60 @@ def _uv(args: argparse.Namespace) -> int:
     return 0
 
 
+def _model(args: argparse.Namespace) -> int:
+    """Read an entity model out of compiled game code instead of guessing it."""
+    from .vanilla_model import (JarSource, boxes_for_class, boxes_for_texture,
+                                layout_document, models_for_texture)
+
+    with JarSource(args.jar) as source:
+        if args.texture:
+            models = models_for_texture(source, args.texture)
+            if not models:
+                print("NO MODEL  no class in %s draws %s" % (args.jar, args.texture))
+                return 1
+            boxes = boxes_for_texture(source, args.texture)
+            label = args.texture
+        else:
+            models = [args.model_class]
+            boxes = boxes_for_class(source.text, args.model_class)
+            label = args.model_class
+        print("MODEL  %s -> %s" % (label, ", ".join(models)))
+        for box in boxes:
+            net = box.net_size
+            print("  %-8s uv=(%3d,%3d) whd=%d,%d,%d  net=%dx%d  delta=%g%s" % (
+                box.part, box.u, box.v, box.w, box.h, box.d, net[0], net[1], box.delta,
+                ("  rot=%s" % (box.rotation,)) if box.rotation else ""))
+        if not boxes:
+            print("  (no boxes: the model may be built by a class this reader did not reach)")
+            return 1
+        if args.out:
+            width = args.texture_width
+            height = args.texture_height
+            if args.texture and (width is None or height is None):
+                found = _texture_size(source, args.texture)
+                if found:
+                    width, height = found
+            document = layout_document(
+                boxes, name=Path(args.out).stem, source="%s (%s)" % (label, ", ".join(models)),
+                texture_width=width or 64, texture_height=height or 32)
+            Path(args.out).write_text(json.dumps(document, indent=1) + chr(10), encoding="utf-8")
+            print("LAYOUT -> %s" % args.out)
+            print("NEXT   -> mc-art uv --layout %s --texture <%s> --out <dir>" % (args.out, label))
+    return 0
+
+
+def _texture_size(source, relative: str):
+    """Find a texture in the jar and read its pixel size, any namespace."""
+    blob = source.texture_bytes(relative)
+    if blob is None:
+        return None
+    import io
+
+    from PIL import Image
+
+    return Image.open(io.BytesIO(blob)).size
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mc_art",
@@ -350,6 +404,17 @@ def build_parser() -> argparse.ArgumentParser:
     measure.add_argument("sprites", nargs="+")
     measure.add_argument("--baseline", action="append", default=[])
     measure.set_defaults(handler=_measure)
+    model = sub.add_parser(
+        "model",
+        help="read an entity model's boxes out of the jar's own bytecode and emit a layout")
+    model.add_argument("--jar", required=True, help="vanilla, Forge or mod jar holding the model classes")
+    model.add_argument("--texture", help="texture path inside the jar, e.g. textures/entity/sheep/sheep.png")
+    model.add_argument("--model-class", help="read this obfuscated model class directly")
+    model.add_argument("--out", help="write a layout document here")
+    model.add_argument("--texture-width", type=int)
+    model.add_argument("--texture-height", type=int)
+    model.set_defaults(handler=_model)
+
     return parser
 
 

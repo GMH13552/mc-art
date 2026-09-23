@@ -1,0 +1,84 @@
+{
+ "format": "minecraft_1_12_modelrenderer_cube_uv",
+ "source": "net.minecraft.client.model.ModelSheep2 (1.12.2, obfuscated class bqo)",
+ "texture_width": 64,
+ "texture_height": 32,
+ "notes": "The wool overlay is NOT the skin model inflated: ModelSheep2 is a separate class with its own box dimensions, and its texture is sheep_fur.png. Recovered from javap -c bqo. The fourth addBox argument is the inflation delta, which grows the rendered cube but never changes the UV net.",
+ "cubes": [
+  {
+   "id": "wool_head",
+   "part_id": "wool_head",
+   "u": 0,
+   "v": 0,
+   "width": 6,
+   "height": 6,
+   "depth": 6,
+   "preview_instances": [
+    [
+     11,
+     0,
+     6,
+     6
+    ]
+   ],
+   "preview_layer": 2,
+   "notes": "ModelSheep2 head.addBox(-3,-4,-4,6,6,6, 0.6f) -- 6 deep, not 8: the head net is 24x12"
+  },
+  {
+   "id": "wool_body",
+   "part_id": "wool_body",
+   "u": 28,
+   "v": 8,
+   "width": 8,
+   "height": 16,
+   "depth": 6,
+   "preview_instances": [
+    [
+     10,
+     6,
+     8,
+     16
+    ]
+   ],
+   "preview_layer": 1,
+   "notes": "ModelSheep2 body.addBox(-4,-10,-7,8,16,6, 1.75f)"
+  },
+  {
+   "id": "wool_legs",
+   "part_id": "wool_legs",
+   "u": 0,
+   "v": 16,
+   "width": 4,
+   "height": 6,
+   "depth": 4,
+   "preview_instances": [
+    [
+     6,
+     22,
+     4,
+     6
+    ],
+    [
+     10,
+     22,
+     4,
+     6
+    ],
+    [
+     14,
+     22,
+     4,
+     6
+    ],
+    [
+     18,
+     22,
+     4,
+     6
+    ]
+   ],
+   "preview_layer": 0,
+   "notes": "ModelSheep2 legs addBox(-2,0,-2,4,6,4, 0.5f) -- half-height sleeve; the fur atlas paints a full 12-tall leg but rows v26..31 are never sampled"
+  }
+ ]
+}

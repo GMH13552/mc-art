@@ -1,0 +1,84 @@
+{
+ "format": "minecraft_1_12_modelrenderer_cube_uv",
+ "source": "net.minecraft.client.model.ModelSheep1 (1.12.2, obfuscated class bqp)",
+ "texture_width": 64,
+ "texture_height": 32,
+ "notes": "Boxes recovered from the model's own bytecode (javap -c bqp), not from memory. ModelSheep1 extends ModelQuadruped(12, 0.0F), which supplies the four 4x12x4 legs at (0,16); the subclass overrides only head and body.",
+ "cubes": [
+  {
+   "id": "head",
+   "part_id": "head",
+   "u": 0,
+   "v": 0,
+   "width": 6,
+   "height": 6,
+   "depth": 8,
+   "preview_instances": [
+    [
+     11,
+     0,
+     6,
+     6
+    ]
+   ],
+   "preview_layer": 2,
+   "notes": "ModelSheep1 head.addBox(-3,-4,-6,6,6,8,0.0)"
+  },
+  {
+   "id": "body",
+   "part_id": "body",
+   "u": 28,
+   "v": 8,
+   "width": 8,
+   "height": 16,
+   "depth": 6,
+   "preview_instances": [
+    [
+     10,
+     6,
+     8,
+     16
+    ]
+   ],
+   "preview_layer": 1,
+   "notes": "ModelSheep1 body.addBox(-4,-10,-7,8,16,6,0.0)"
+  },
+  {
+   "id": "legs",
+   "part_id": "legs",
+   "u": 0,
+   "v": 16,
+   "width": 4,
+   "height": 12,
+   "depth": 4,
+   "preview_instances": [
+    [
+     6,
+     22,
+     4,
+     12
+    ],
+    [
+     10,
+     22,
+     4,
+     12
+    ],
+    [
+     14,
+     22,
+     4,
+     12
+    ],
+    [
+     18,
+     22,
+     4,
+     12
+    ]
+   ],
+   "preview_layer": 0,
+   "notes": "ModelQuadruped legs addBox(-2,0,-2,4,12,4,0.0); four legs share UV"
+  }
+ ]
+}

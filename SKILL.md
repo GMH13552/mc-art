@@ -49,7 +49,8 @@ $M render --plan my.plan.json --out outputs/mine
 # 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
 #    $M pack --manifest pack.json --out pack/     see "Traps" #3
 #
-# 7. For an entity: find its box unwrap, or author one, then render it
+# 7. For an entity: read its box unwrap out of the model code, or author one
+#    $M model --jar game.jar --texture textures/entity/sheep/sheep.png
 #    $M layouts
 #    $M boxes --spec boxes.json --out my_layout.json
 #    $M uv --layout my_layout.json --texture atlas.png --out out/
@@ -181,13 +182,25 @@ agreement. Also confirm, per asset:
   (blood, glow) and compare every asset against it;
 - **hue spread** across the wood family — one narrow band, not several.
 
-## Entity UV: find the shape, or author one, then look at it
+## Entity UV: read the model, or author one, then look at it
 
 An entity atlas is a box unwrap. Do not guess one — and do not bypass the
 engine, which is what a live slime run did before these three commands
 existed.
 
+**There is no entity model file to read.** A 1.12 asset root has 878 block and
+717 item JSONs under `models/` and *zero* entity ones. A mob's geometry and
+its texture offsets exist only as Java, and the jar you are handed is obfuscated,
+so `ModelSheep1` is a class called `bqp` that nothing in the archive
+names. A layout derived from memory is a guess, and it is wrong in ways the
+preview shows you. Read the bytecode instead — it needs `javap`, which ships
+with any JDK:
+
 ```bash
+# 0. READ — recover the boxes from the class that draws this texture
+$M model --jar game.jar --texture textures/entity/sheep/sheep_fur.png
+$M model --jar game.jar --texture textures/entity/cow/cow.png --out cow.json
+
 # 1. FIND — the shapes that already ship, with their parts and faces
 $M layouts
 
@@ -197,6 +210,22 @@ $M boxes --spec boxes.json --out my_layout.json
 # 3. LOOK — the annotated atlas plus two previews
 $M uv --layout my_layout.json --texture atlas.png --out out/
 ```
+
+`model` prints every `addBox` as texture offset, size and net size. It
+follows the super constructor, because a sheep's four legs belong to
+`ModelQuadruped` and the subclass never mentions them, and it keeps *several
+boxes per part*, because `setTextureOffset` is fluent and returns the renderer:
+`ModelCow` hangs both horns off the head and its udder off the body. The net
+size is the number to check — `2 * depth + 2 * width` by `depth + height`.
+
+**A wool overlay is not the skin model inflated.** That trap cost a round.
+`ModelSheep1` (skin, `sheep.png`) has a `6x6x8` head and `4x12x4` legs;
+`ModelSheep2` (wool, `sheep_fur.png`) has a `6x6x6` head and `4x6x4` legs.
+Same texture offsets, different nets: `28x14` against `24x12` for the head,
+`16x16` against `16x10` for the legs. Lay the fur out on the skin's numbers
+and the head draws four pixels too wide while the legs run six pixels proud of
+their frame. The `0.6`, `1.75` and `0.5` deltas inflate the *rendered* cube
+and never the net.
 
 `boxes.json` is the object, not a template — one entry per physical part:
 
@@ -238,6 +267,13 @@ Two traps specific to entity work:
   face into a 32x16 rhombus, so one texel becomes a 2:1 parallelogram. Geometry
   is correct; it just is not what you will see in the world. Use the previews to
   check face ownership and shape, not final appearance.
+- **Painted outside every box is the signal; painted-but-unsampled is not.**
+  Vanilla leaves dead pixels: `sheep_fur.png` paints a full 12-tall leg where
+  `ModelSheep2` reads only the top six rows, and both sheep atlases carry 12
+  stray pixels beside the body. Check the direction that matters — *is a painted
+  pixel claimed by no box?* — because that is a part you have not modelled. A box
+  sampling transparent texels is usually a face the player can never see, which is
+  why the artists left it blank.
 
 ## Art literacy: where the eye is allowed to go
 

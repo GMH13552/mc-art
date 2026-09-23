@@ -69,6 +69,11 @@ class BoxSpec:
     height: int
     depth: int
     origin: tuple[int, int, int] | None = None
+    # Explicit texture offsets. The shelf packer assigns them when they are
+    # absent; a box that reproduces an existing atlas (a vanilla model's own
+    # offsets) states them, because those are not a packing choice.
+    u: int | None = None
+    v: int | None = None
     notes: str = ""
 
     def __post_init__(self) -> None:
@@ -117,6 +122,8 @@ def boxes_from_dict(payload: Any) -> list[BoxSpec]:
             height=_positive_int(height, "box height"),
             depth=_positive_int(depth, "box depth"),
             origin=_origin(item.get("origin")),
+            u=_offset(item.get("u", item.get("texture_u"))),
+            v=_offset(item.get("v", item.get("texture_v"))),
             notes=str(item.get("notes") or "").strip(),
         ))
     return boxes
@@ -198,6 +205,19 @@ class AuthoredLayout:
         return target
 
 
+def _offset(value: Any) -> int | None:
+    """An explicit texture offset, or None to let the packer choose."""
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("texture offset must be an integer, got %r" % (value,))
+    if number < 0:
+        raise ValueError("texture offset cannot be negative: %d" % number)
+    return number
+
+
 def pack_boxes(
     boxes: Iterable[BoxSpec],
     *,
@@ -216,25 +236,46 @@ def pack_boxes(
     if margin < 0:
         raise ValueError("margin cannot be negative")
 
-    widest = max(box.net_size[0] for box in ordered)
-    width = canvas_width or max(64, widest)
-    if width < widest:
-        width = widest
+    stated = [(box.u, box.v) for box in ordered if box.u is not None or box.v is not None]
+    if stated and len(stated) != len(ordered):
+        raise ValueError(
+            "a layout that states texture offsets must state them for every box; "
+            "%d of %d do" % (len(stated), len(ordered))
+        )
 
-    placements: list[tuple[BoxSpec, int, int]] = []
-    x = y = row_height = 0
-    for box in ordered:
-        net_width, net_height = box.net_size
-        if x > 0 and x + net_width > width:
-            y += row_height + margin
-            x = 0
-            row_height = 0
-        placements.append((box, x, y))
-        x += net_width + margin
-        row_height = max(row_height, net_height)
+    if stated:
+        # Reproducing a known atlas: the offsets are the model's, not ours.
+        placements = [(box, box.u, box.v) for box in ordered]
+        used_width = max(box.u + box.net_size[0] for box in ordered)
+        used_height = max(box.v + box.net_size[1] for box in ordered)
+        canvas = (
+            canvas_width or _next_power_of_two(used_width),
+            _next_power_of_two(max(16, used_height)),
+        )
+        if canvas[0] < used_width or canvas[1] < used_height:
+            raise ValueError(
+                "stated offsets do not fit a %dx%d canvas" % (canvas[0], canvas[1])
+            )
+    else:
+        widest = max(box.net_size[0] for box in ordered)
+        width = canvas_width or max(64, widest)
+        if width < widest:
+            width = widest
 
-    used_height = y + row_height
-    canvas = (_next_power_of_two(width), _next_power_of_two(max(16, used_height)))
+        placements = []
+        x = y = row_height = 0
+        for box in ordered:
+            net_width, net_height = box.net_size
+            if x > 0 and x + net_width > width:
+                y += row_height + margin
+                x = 0
+                row_height = 0
+            placements.append((box, x, y))
+            x += net_width + margin
+            row_height = max(row_height, net_height)
+
+        used_height = y + row_height
+        canvas = (_next_power_of_two(width), _next_power_of_two(max(16, used_height)))
 
     previews = _preview_placements(ordered)
     preview_by_id = {box.id: placement for box, placement in zip(ordered, previews)}

@@ -1,0 +1,159 @@
+Compiled from "SourceFile"
+public class bpn extends bqm {
+  public bpn();
+    Code:
+       0: aload_0
+       1: bipush        12
+       3: fconst_0
+       4: invokespecial #10                 // Method bqm."<init>":(IF)V
+       7: aload_0
+       8: new           #12                 // class brs
+      11: dup
+      12: aload_0
+      13: iconst_0
+      14: iconst_0
+      15: invokespecial #15                 // Method brs."<init>":(Lbqf;II)V
+      18: putfield      #19                 // Field a:Lbrs;
+      21: aload_0
+      22: getfield      #19                 // Field a:Lbrs;
+      25: ldc           #20                 // float -4.0f
+      27: ldc           #20                 // float -4.0f
+      29: ldc           #21                 // float -6.0f
+      31: bipush        8
+      33: bipush        8
+      35: bipush        6
+      37: fconst_0
+      38: invokevirtual #24                 // Method brs.a:(FFFIIIF)V
+      41: aload_0
+      42: getfield      #19                 // Field a:Lbrs;
+      45: fconst_0
+      46: ldc           #25                 // float 4.0f
+      48: ldc           #26                 // float -8.0f
+      50: invokevirtual #29                 // Method brs.a:(FFF)V
+      53: aload_0
+      54: getfield      #19                 // Field a:Lbrs;
+      57: bipush        22
+      59: iconst_0
+      60: invokevirtual #32                 // Method brs.a:(II)Lbrs;
+      63: ldc           #33                 // float -5.0f
+      65: ldc           #33                 // float -5.0f
+      67: ldc           #20                 // float -4.0f
+      69: iconst_1
+      70: iconst_3
+      71: iconst_1
+      72: fconst_0
+      73: invokevirtual #24                 // Method brs.a:(FFFIIIF)V
+      76: aload_0
+      77: getfield      #19                 // Field a:Lbrs;
+      80: bipush        22
+      82: iconst_0
+      83: invokevirtual #32                 // Method brs.a:(II)Lbrs;
+      86: ldc           #25                 // float 4.0f
+      88: ldc           #33                 // float -5.0f
+      90: ldc           #20                 // float -4.0f
+      92: iconst_1
+      93: iconst_3
+      94: iconst_1
+      95: fconst_0
+      96: invokevirtual #24                 // Method brs.a:(FFFIIIF)V
+      99: aload_0
+     100: new           #12                 // class brs
+     103: dup
+     104: aload_0
+     105: bipush        18
+     107: iconst_4
+     108: invokespecial #15                 // Method brs."<init>":(Lbqf;II)V
+     111: putfield      #36                 // Field b:Lbrs;
+     114: aload_0
+     115: getfield      #36                 // Field b:Lbrs;
+     118: ldc           #21                 // float -6.0f
+     120: ldc           #37                 // float -10.0f
+     122: ldc           #38                 // float -7.0f
+     124: bipush        12
+     126: bipush        18
+     128: bipush        10
+     130: fconst_0
+     131: invokevirtual #24                 // Method brs.a:(FFFIIIF)V
+     134: aload_0
+     135: getfield      #36                 // Field b:Lbrs;
+     138: fconst_0
+     139: ldc           #39                 // float 5.0f
+     141: fconst_2
+     142: invokevirtual #29                 // Method brs.a:(FFF)V
+     145: aload_0
+     146: getfield      #36                 // Field b:Lbrs;
+     149: bipush        52
+     151: iconst_0
+     152: invokevirtual #32                 // Method brs.a:(II)Lbrs;
+     155: ldc           #40                 // float -2.0f
+     157: fconst_2
+     158: ldc           #26                 // float -8.0f
+     160: iconst_4
+     161: bipush        6
+     163: iconst_1
+     164: invokevirtual #43                 // Method brs.a:(FFFIII)Lbrs;
+     167: pop
+     168: aload_0
+     169: getfield      #46                 // Field c:Lbrs;
+     172: dup
+     173: getfield      #49                 // Field brs.c:F
+     176: fconst_1
+     177: fsub
+     178: putfield      #49                 // Field brs.c:F
+     181: aload_0
+     182: getfield      #52                 // Field d:Lbrs;
+     185: dup
+     186: getfield      #49                 // Field brs.c:F
+     189: fconst_1
+     190: fadd
+     191: putfield      #49                 // Field brs.c:F
+     194: aload_0
+     195: getfield      #46                 // Field c:Lbrs;
+     198: dup
+     199: getfield      #55                 // Field brs.e:F
+     202: fconst_0
+     203: fadd
+     204: putfield      #55                 // Field brs.e:F
+     207: aload_0
+     208: getfield      #52                 // Field d:Lbrs;
+     211: dup
+     212: getfield      #55                 // Field brs.e:F
+     215: fconst_0
+     216: fadd
+     217: putfield      #55                 // Field brs.e:F
+     220: aload_0
+     221: getfield      #57                 // Field e:Lbrs;
+     224: dup
+     225: getfield      #49                 // Field brs.c:F
+     228: fconst_1
+     229: fsub
+     230: putfield      #49                 // Field brs.c:F
+     233: aload_0
+     234: getfield      #60                 // Field f:Lbrs;
+     237: dup
+     238: getfield      #49                 // Field brs.c:F
+     241: fconst_1
+     242: fadd
+     243: putfield      #49                 // Field brs.c:F
+     246: aload_0
+     247: getfield      #57                 // Field e:Lbrs;
+     250: dup
+     251: getfield      #55                 // Field brs.e:F
+     254: fconst_1
+     255: fsub
+     256: putfield      #55                 // Field brs.e:F
+     259: aload_0
+     260: getfield      #60                 // Field f:Lbrs;
+     263: dup
+     264: getfield      #55                 // Field brs.e:F
+     267: fconst_1
+     268: fsub
+     269: putfield      #55                 // Field brs.e:F
+     272: aload_0
+     273: dup
+     274: getfield      #63                 // Field h:F
+     277: fconst_2
+     278: fadd
+     279: putfield      #63                 // Field h:F
+     282: return
+}
