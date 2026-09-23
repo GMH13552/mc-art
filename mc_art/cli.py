@@ -272,6 +272,8 @@ def _uv(args: argparse.Namespace) -> int:
     result = render_views(args.layout, args.texture, args.out, scale=args.scale)
     for key, value in result["views"].items():
         print("%-14s %s" % (key.upper(), value))
+    for warning in result["warnings"]:
+        print("WARNING  %s" % warning)
     if any(key.endswith("_error") for key in result["views"]):
         print("one preview could not be built; the uvmap alone still shows the region ownership")
     return 0

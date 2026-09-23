@@ -110,6 +110,33 @@ def annotate_layout(texture_path: str | Path, regions: list[Any], scale: int = 8
     return output
 
 
+def footprint_warnings(regions: list[Any]) -> list[str]:
+    """Report preview boxes that state a size the renderer will ignore.
+
+    A preview instance is a position. It used to be a size too, and two shipped
+    layouts carried sizes that were simply wrong, which drew an 8x8 head at
+    10x8. The renderer now ignores the size, so a wrong one is no longer
+    harmful -- but it is still a lie in the file, and whoever reads it next will
+    believe it. Say so rather than let it sit.
+    """
+    warnings: list[str] = []
+    for region in regions:
+        # The instance rides on the cube and is copied to all six faces, but
+        # only the front face is ever placed by the previews; the other five
+        # are different sizes by construction.
+        if region.face != "front":
+            continue
+        width = region.bbox[2] - region.bbox[0]
+        height = region.bbox[3] - region.bbox[1]
+        for item in region.preview_instances or []:
+            if (item[2], item[3]) != (width, height):
+                warnings.append(
+                    "%s/%s states %dx%d but the face is %dx%d; only its position is used"
+                    % (region.part_id, region.face, item[2], item[3], width, height)
+                )
+    return warnings
+
+
 def render_views(layout_path: str | Path, texture_path: str | Path, out_dir: str | Path,
                  scale: int = 8) -> dict[str, Any]:
     """Write the annotated atlas plus both entity previews."""
@@ -128,4 +155,9 @@ def render_views(layout_path: str | Path, texture_path: str | Path, out_dir: str
             written[name] = str(out / ("%s_%s.png" % (stem, name)))
         except (ValueError, KeyError) as exc:
             written[name + "_error"] = str(exc)
-    return {"texture": str(texture_path), "layout": str(layout_path), "views": written}
+    return {
+        "texture": str(texture_path),
+        "layout": str(layout_path),
+        "views": written,
+        "warnings": footprint_warnings(regions),
+    }
