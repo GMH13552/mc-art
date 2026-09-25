@@ -1,0 +1,717 @@
+Compiled from "SourceFile"
+public class brs {
+  public float a;
+
+  public float b;
+
+  private int r;
+
+  private int s;
+
+  public float c;
+
+  public float d;
+
+  public float e;
+
+  public float f;
+
+  public float g;
+
+  public float h;
+
+  private boolean t;
+
+  private int u;
+
+  public boolean i;
+
+  public boolean j;
+
+  public boolean k;
+
+  public java.util.List<brq> l;
+
+  public java.util.List<brs> m;
+
+  public final java.lang.String n;
+
+  private final bqf v;
+
+  public float o;
+
+  public float p;
+
+  public float q;
+
+  public brs(bqf, java.lang.String);
+    Code:
+       0: aload_0
+       1: invokespecial #40                 // Method java/lang/Object."<init>":()V
+       4: aload_0
+       5: ldc           #41                 // float 64.0f
+       7: putfield      #43                 // Field a:F
+      10: aload_0
+      11: ldc           #44                 // float 32.0f
+      13: putfield      #46                 // Field b:F
+      16: aload_0
+      17: iconst_1
+      18: putfield      #48                 // Field j:Z
+      21: aload_0
+      22: invokestatic  #54                 // Method com/google/common/collect/Lists.newArrayList:()Ljava/util/ArrayList;
+      25: putfield      #56                 // Field l:Ljava/util/List;
+      28: aload_0
+      29: aload_1
+      30: putfield      #58                 // Field v:Lbqf;
+      33: aload_1
+      34: getfield      #62                 // Field bqf.r:Ljava/util/List;
+      37: aload_0
+      38: invokeinterface #68,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      43: pop
+      44: aload_0
+      45: aload_2
+      46: putfield      #70                 // Field n:Ljava/lang/String;
+      49: aload_0
+      50: aload_1
+      51: getfield      #72                 // Field bqf.s:I
+      54: aload_1
+      55: getfield      #74                 // Field bqf.t:I
+      58: invokevirtual #77                 // Method b:(II)Lbrs;
+      61: pop
+      62: return
+
+  public brs(bqf);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: aconst_null
+       3: invokespecial #83                 // Method "<init>":(Lbqf;Ljava/lang/String;)V
+       6: return
+
+  public brs(bqf, int, int);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokespecial #86                 // Method "<init>":(Lbqf;)V
+       5: aload_0
+       6: iload_2
+       7: iload_3
+       8: invokevirtual #88                 // Method a:(II)Lbrs;
+      11: pop
+      12: return
+
+  public void a(brs);
+    Code:
+       0: aload_0
+       1: getfield      #91                 // Field m:Ljava/util/List;
+       4: ifnonnull     14
+       7: aload_0
+       8: invokestatic  #54                 // Method com/google/common/collect/Lists.newArrayList:()Ljava/util/ArrayList;
+      11: putfield      #91                 // Field m:Ljava/util/List;
+      14: aload_0
+      15: getfield      #91                 // Field m:Ljava/util/List;
+      18: aload_1
+      19: invokeinterface #68,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      24: pop
+      25: return
+
+  public brs a(int, int);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #93                 // Field r:I
+       5: aload_0
+       6: iload_2
+       7: putfield      #94                 // Field s:I
+      10: aload_0
+      11: areturn
+
+  public brs a(java.lang.String, float, float, float, int, int, int);
+    Code:
+       0: new           #97                 // class java/lang/StringBuilder
+       3: dup
+       4: invokespecial #98                 // Method java/lang/StringBuilder."<init>":()V
+       7: aload_0
+       8: getfield      #70                 // Field n:Ljava/lang/String;
+      11: invokevirtual #102                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      14: ldc           #104                // String .
+      16: invokevirtual #102                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      19: aload_1
+      20: invokevirtual #102                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      23: invokevirtual #108                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+      26: astore_1
+      27: aload_0
+      28: getfield      #58                 // Field v:Lbqf;
+      31: aload_1
+      32: invokevirtual #111                // Method bqf.a:(Ljava/lang/String;)Lbrt;
+      35: astore        8
+      37: aload_0
+      38: aload         8
+      40: getfield      #115                // Field brt.a:I
+      43: aload         8
+      45: getfield      #117                // Field brt.b:I
+      48: invokevirtual #88                 // Method a:(II)Lbrs;
+      51: pop
+      52: aload_0
+      53: getfield      #56                 // Field l:Ljava/util/List;
+      56: new           #119                // class brq
+      59: dup
+      60: aload_0
+      61: aload_0
+      62: getfield      #93                 // Field r:I
+      65: aload_0
+      66: getfield      #94                 // Field s:I
+      69: fload_2
+      70: fload_3
+      71: fload         4
+      73: iload         5
+      75: iload         6
+      77: iload         7
+      79: fconst_0
+      80: invokespecial #122                // Method brq."<init>":(Lbrs;IIFFFIIIF)V
+      83: aload_1
+      84: invokevirtual #125                // Method brq.a:(Ljava/lang/String;)Lbrq;
+      87: invokeinterface #68,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      92: pop
+      93: aload_0
+      94: areturn
+
+  public brs a(float, float, float, int, int, int);
+    Code:
+       0: aload_0
+       1: getfield      #56                 // Field l:Ljava/util/List;
+       4: new           #119                // class brq
+       7: dup
+       8: aload_0
+       9: aload_0
+      10: getfield      #93                 // Field r:I
+      13: aload_0
+      14: getfield      #94                 // Field s:I
+      17: fload_1
+      18: fload_2
+      19: fload_3
+      20: iload         4
+      22: iload         5
+      24: iload         6
+      26: fconst_0
+      27: invokespecial #122                // Method brq."<init>":(Lbrs;IIFFFIIIF)V
+      30: invokeinterface #68,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      35: pop
+      36: aload_0
+      37: areturn
+
+  public brs a(float, float, float, int, int, int, boolean);
+    Code:
+       0: aload_0
+       1: getfield      #56                 // Field l:Ljava/util/List;
+       4: new           #119                // class brq
+       7: dup
+       8: aload_0
+       9: aload_0
+      10: getfield      #93                 // Field r:I
+      13: aload_0
+      14: getfield      #94                 // Field s:I
+      17: fload_1
+      18: fload_2
+      19: fload_3
+      20: iload         4
+      22: iload         5
+      24: iload         6
+      26: fconst_0
+      27: iload         7
+      29: invokespecial #131                // Method brq."<init>":(Lbrs;IIFFFIIIFZ)V
+      32: invokeinterface #68,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      37: pop
+      38: aload_0
+      39: areturn
+
+  public void a(float, float, float, int, int, int, float);
+    Code:
+       0: aload_0
+       1: getfield      #56                 // Field l:Ljava/util/List;
+       4: new           #119                // class brq
+       7: dup
+       8: aload_0
+       9: aload_0
+      10: getfield      #93                 // Field r:I
+      13: aload_0
+      14: getfield      #94                 // Field s:I
+      17: fload_1
+      18: fload_2
+      19: fload_3
+      20: iload         4
+      22: iload         5
+      24: iload         6
+      26: fload         7
+      28: invokespecial #122                // Method brq."<init>":(Lbrs;IIFFFIIIF)V
+      31: invokeinterface #68,  2           // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      36: pop
+      37: return
+
+  public void a(float, float, float);
+    Code:
+       0: aload_0
+       1: fload_1
+       2: putfield      #135                // Field c:F
+       5: aload_0
+       6: fload_2
+       7: putfield      #137                // Field d:F
+      10: aload_0
+      11: fload_3
+      12: putfield      #139                // Field e:F
+      15: return
+
+  public void a(float);
+    Code:
+       0: aload_0
+       1: getfield      #142                // Field k:Z
+       4: ifeq          8
+       7: return
+       8: aload_0
+       9: getfield      #48                 // Field j:Z
+      12: ifne          16
+      15: return
+      16: aload_0
+      17: getfield      #144                // Field t:Z
+      20: ifne          28
+      23: aload_0
+      24: fload_1
+      25: invokespecial #146                // Method d:(F)V
+      28: aload_0
+      29: getfield      #148                // Field o:F
+      32: aload_0
+      33: getfield      #150                // Field p:F
+      36: aload_0
+      37: getfield      #152                // Field q:F
+      40: invokestatic  #156                // Method bus.c:(FFF)V
+      43: aload_0
+      44: getfield      #158                // Field f:F
+      47: fconst_0
+      48: fcmpl
+      49: ifne          70
+      52: aload_0
+      53: getfield      #160                // Field g:F
+      56: fconst_0
+      57: fcmpl
+      58: ifne          70
+      61: aload_0
+      62: getfield      #162                // Field h:F
+      65: fconst_0
+      66: fcmpl
+      67: ifeq          218
+      70: invokestatic  #165                // Method bus.G:()V
+      73: aload_0
+      74: getfield      #135                // Field c:F
+      77: fload_1
+      78: fmul
+      79: aload_0
+      80: getfield      #137                // Field d:F
+      83: fload_1
+      84: fmul
+      85: aload_0
+      86: getfield      #139                // Field e:F
+      89: fload_1
+      90: fmul
+      91: invokestatic  #156                // Method bus.c:(FFF)V
+      94: aload_0
+      95: getfield      #162                // Field h:F
+      98: fconst_0
+      99: fcmpl
+     100: ifeq          116
+     103: aload_0
+     104: getfield      #162                // Field h:F
+     107: ldc           #166                // float 57.295776f
+     109: fmul
+     110: fconst_0
+     111: fconst_0
+     112: fconst_1
+     113: invokestatic  #169                // Method bus.b:(FFFF)V
+     116: aload_0
+     117: getfield      #160                // Field g:F
+     120: fconst_0
+     121: fcmpl
+     122: ifeq          138
+     125: aload_0
+     126: getfield      #160                // Field g:F
+     129: ldc           #166                // float 57.295776f
+     131: fmul
+     132: fconst_0
+     133: fconst_1
+     134: fconst_0
+     135: invokestatic  #169                // Method bus.b:(FFFF)V
+     138: aload_0
+     139: getfield      #158                // Field f:F
+     142: fconst_0
+     143: fcmpl
+     144: ifeq          160
+     147: aload_0
+     148: getfield      #158                // Field f:F
+     151: ldc           #166                // float 57.295776f
+     153: fmul
+     154: fconst_1
+     155: fconst_0
+     156: fconst_0
+     157: invokestatic  #169                // Method bus.b:(FFFF)V
+     160: aload_0
+     161: getfield      #171                // Field u:I
+     164: invokestatic  #174                // Method bus.s:(I)V
+     167: aload_0
+     168: getfield      #91                 // Field m:Ljava/util/List;
+     171: ifnull        212
+     174: iconst_0
+     175: istore_2
+     176: iload_2
+     177: aload_0
+     178: getfield      #91                 // Field m:Ljava/util/List;
+     181: invokeinterface #178,  1          // InterfaceMethod java/util/List.size:()I
+     186: if_icmpge     212
+     189: aload_0
+     190: getfield      #91                 // Field m:Ljava/util/List;
+     193: iload_2
+     194: invokeinterface #182,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+     199: checkcast     #2                  // class brs
+     202: fload_1
+     203: invokevirtual #184                // Method a:(F)V
+     206: iinc          2, 1
+     209: goto          176
+     212: invokestatic  #187                // Method bus.H:()V
+     215: goto          397
+     218: aload_0
+     219: getfield      #135                // Field c:F
+     222: fconst_0
+     223: fcmpl
+     224: ifne          245
+     227: aload_0
+     228: getfield      #137                // Field d:F
+     231: fconst_0
+     232: fcmpl
+     233: ifne          245
+     236: aload_0
+     237: getfield      #139                // Field e:F
+     240: fconst_0
+     241: fcmpl
+     242: ifeq          345
+     245: aload_0
+     246: getfield      #135                // Field c:F
+     249: fload_1
+     250: fmul
+     251: aload_0
+     252: getfield      #137                // Field d:F
+     255: fload_1
+     256: fmul
+     257: aload_0
+     258: getfield      #139                // Field e:F
+     261: fload_1
+     262: fmul
+     263: invokestatic  #156                // Method bus.c:(FFF)V
+     266: aload_0
+     267: getfield      #171                // Field u:I
+     270: invokestatic  #174                // Method bus.s:(I)V
+     273: aload_0
+     274: getfield      #91                 // Field m:Ljava/util/List;
+     277: ifnull        318
+     280: iconst_0
+     281: istore_2
+     282: iload_2
+     283: aload_0
+     284: getfield      #91                 // Field m:Ljava/util/List;
+     287: invokeinterface #178,  1          // InterfaceMethod java/util/List.size:()I
+     292: if_icmpge     318
+     295: aload_0
+     296: getfield      #91                 // Field m:Ljava/util/List;
+     299: iload_2
+     300: invokeinterface #182,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+     305: checkcast     #2                  // class brs
+     308: fload_1
+     309: invokevirtual #184                // Method a:(F)V
+     312: iinc          2, 1
+     315: goto          282
+     318: aload_0
+     319: getfield      #135                // Field c:F
+     322: fneg
+     323: fload_1
+     324: fmul
+     325: aload_0
+     326: getfield      #137                // Field d:F
+     329: fneg
+     330: fload_1
+     331: fmul
+     332: aload_0
+     333: getfield      #139                // Field e:F
+     336: fneg
+     337: fload_1
+     338: fmul
+     339: invokestatic  #156                // Method bus.c:(FFF)V
+     342: goto          397
+     345: aload_0
+     346: getfield      #171                // Field u:I
+     349: invokestatic  #174                // Method bus.s:(I)V
+     352: aload_0
+     353: getfield      #91                 // Field m:Ljava/util/List;
+     356: ifnull        397
+     359: iconst_0
+     360: istore_2
+     361: iload_2
+     362: aload_0
+     363: getfield      #91                 // Field m:Ljava/util/List;
+     366: invokeinterface #178,  1          // InterfaceMethod java/util/List.size:()I
+     371: if_icmpge     397
+     374: aload_0
+     375: getfield      #91                 // Field m:Ljava/util/List;
+     378: iload_2
+     379: invokeinterface #182,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+     384: checkcast     #2                  // class brs
+     387: fload_1
+     388: invokevirtual #184                // Method a:(F)V
+     391: iinc          2, 1
+     394: goto          361
+     397: aload_0
+     398: getfield      #148                // Field o:F
+     401: fneg
+     402: aload_0
+     403: getfield      #150                // Field p:F
+     406: fneg
+     407: aload_0
+     408: getfield      #152                // Field q:F
+     411: fneg
+     412: invokestatic  #156                // Method bus.c:(FFF)V
+     415: return
+
+  public void b(float);
+    Code:
+       0: aload_0
+       1: getfield      #142                // Field k:Z
+       4: ifeq          8
+       7: return
+       8: aload_0
+       9: getfield      #48                 // Field j:Z
+      12: ifne          16
+      15: return
+      16: aload_0
+      17: getfield      #144                // Field t:Z
+      20: ifne          28
+      23: aload_0
+      24: fload_1
+      25: invokespecial #146                // Method d:(F)V
+      28: invokestatic  #165                // Method bus.G:()V
+      31: aload_0
+      32: getfield      #135                // Field c:F
+      35: fload_1
+      36: fmul
+      37: aload_0
+      38: getfield      #137                // Field d:F
+      41: fload_1
+      42: fmul
+      43: aload_0
+      44: getfield      #139                // Field e:F
+      47: fload_1
+      48: fmul
+      49: invokestatic  #156                // Method bus.c:(FFF)V
+      52: aload_0
+      53: getfield      #160                // Field g:F
+      56: fconst_0
+      57: fcmpl
+      58: ifeq          74
+      61: aload_0
+      62: getfield      #160                // Field g:F
+      65: ldc           #166                // float 57.295776f
+      67: fmul
+      68: fconst_0
+      69: fconst_1
+      70: fconst_0
+      71: invokestatic  #169                // Method bus.b:(FFFF)V
+      74: aload_0
+      75: getfield      #158                // Field f:F
+      78: fconst_0
+      79: fcmpl
+      80: ifeq          96
+      83: aload_0
+      84: getfield      #158                // Field f:F
+      87: ldc           #166                // float 57.295776f
+      89: fmul
+      90: fconst_1
+      91: fconst_0
+      92: fconst_0
+      93: invokestatic  #169                // Method bus.b:(FFFF)V
+      96: aload_0
+      97: getfield      #162                // Field h:F
+     100: fconst_0
+     101: fcmpl
+     102: ifeq          118
+     105: aload_0
+     106: getfield      #162                // Field h:F
+     109: ldc           #166                // float 57.295776f
+     111: fmul
+     112: fconst_0
+     113: fconst_0
+     114: fconst_1
+     115: invokestatic  #169                // Method bus.b:(FFFF)V
+     118: aload_0
+     119: getfield      #171                // Field u:I
+     122: invokestatic  #174                // Method bus.s:(I)V
+     125: invokestatic  #187                // Method bus.H:()V
+     128: return
+
+  public void c(float);
+    Code:
+       0: aload_0
+       1: getfield      #142                // Field k:Z
+       4: ifeq          8
+       7: return
+       8: aload_0
+       9: getfield      #48                 // Field j:Z
+      12: ifne          16
+      15: return
+      16: aload_0
+      17: getfield      #144                // Field t:Z
+      20: ifne          28
+      23: aload_0
+      24: fload_1
+      25: invokespecial #146                // Method d:(F)V
+      28: aload_0
+      29: getfield      #158                // Field f:F
+      32: fconst_0
+      33: fcmpl
+      34: ifne          55
+      37: aload_0
+      38: getfield      #160                // Field g:F
+      41: fconst_0
+      42: fcmpl
+      43: ifne          55
+      46: aload_0
+      47: getfield      #162                // Field h:F
+      50: fconst_0
+      51: fcmpl
+      52: ifeq          145
+      55: aload_0
+      56: getfield      #135                // Field c:F
+      59: fload_1
+      60: fmul
+      61: aload_0
+      62: getfield      #137                // Field d:F
+      65: fload_1
+      66: fmul
+      67: aload_0
+      68: getfield      #139                // Field e:F
+      71: fload_1
+      72: fmul
+      73: invokestatic  #156                // Method bus.c:(FFF)V
+      76: aload_0
+      77: getfield      #162                // Field h:F
+      80: fconst_0
+      81: fcmpl
+      82: ifeq          98
+      85: aload_0
+      86: getfield      #162                // Field h:F
+      89: ldc           #166                // float 57.295776f
+      91: fmul
+      92: fconst_0
+      93: fconst_0
+      94: fconst_1
+      95: invokestatic  #169                // Method bus.b:(FFFF)V
+      98: aload_0
+      99: getfield      #160                // Field g:F
+     102: fconst_0
+     103: fcmpl
+     104: ifeq          120
+     107: aload_0
+     108: getfield      #160                // Field g:F
+     111: ldc           #166                // float 57.295776f
+     113: fmul
+     114: fconst_0
+     115: fconst_1
+     116: fconst_0
+     117: invokestatic  #169                // Method bus.b:(FFFF)V
+     120: aload_0
+     121: getfield      #158                // Field f:F
+     124: fconst_0
+     125: fcmpl
+     126: ifeq          193
+     129: aload_0
+     130: getfield      #158                // Field f:F
+     133: ldc           #166                // float 57.295776f
+     135: fmul
+     136: fconst_1
+     137: fconst_0
+     138: fconst_0
+     139: invokestatic  #169                // Method bus.b:(FFFF)V
+     142: goto          193
+     145: aload_0
+     146: getfield      #135                // Field c:F
+     149: fconst_0
+     150: fcmpl
+     151: ifne          172
+     154: aload_0
+     155: getfield      #137                // Field d:F
+     158: fconst_0
+     159: fcmpl
+     160: ifne          172
+     163: aload_0
+     164: getfield      #139                // Field e:F
+     167: fconst_0
+     168: fcmpl
+     169: ifeq          193
+     172: aload_0
+     173: getfield      #135                // Field c:F
+     176: fload_1
+     177: fmul
+     178: aload_0
+     179: getfield      #137                // Field d:F
+     182: fload_1
+     183: fmul
+     184: aload_0
+     185: getfield      #139                // Field e:F
+     188: fload_1
+     189: fmul
+     190: invokestatic  #156                // Method bus.c:(FFF)V
+     193: return
+
+  private void d(float);
+    Code:
+       0: aload_0
+       1: iconst_1
+       2: invokestatic  #192                // Method bia.a:(I)I
+       5: putfield      #171                // Field u:I
+       8: aload_0
+       9: getfield      #171                // Field u:I
+      12: sipush        4864
+      15: invokestatic  #195                // Method bus.f:(II)V
+      18: invokestatic  #200                // Method bve.a:()Lbve;
+      21: invokevirtual #203                // Method bve.c:()Lbuk;
+      24: astore_2
+      25: iconst_0
+      26: istore_3
+      27: iload_3
+      28: aload_0
+      29: getfield      #56                 // Field l:Ljava/util/List;
+      32: invokeinterface #178,  1          // InterfaceMethod java/util/List.size:()I
+      37: if_icmpge     64
+      40: aload_0
+      41: getfield      #56                 // Field l:Ljava/util/List;
+      44: iload_3
+      45: invokeinterface #182,  2          // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+      50: checkcast     #119                // class brq
+      53: aload_2
+      54: fload_1
+      55: invokevirtual #208                // Method brq.a:(Lbuk;F)V
+      58: iinc          3, 1
+      61: goto          27
+      64: invokestatic  #211                // Method bus.K:()V
+      67: aload_0
+      68: iconst_1
+      69: putfield      #144                // Field t:Z
+      72: return
+
+  public brs b(int, int);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: i2f
+       3: putfield      #43                 // Field a:F
+       6: aload_0
+       7: iload_2
+       8: i2f
+       9: putfield      #46                 // Field b:F
+      12: aload_0
+      13: areturn
+}

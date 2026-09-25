@@ -135,23 +135,27 @@ everything above is flat. So the last look is a render of the model itself.
 ```bash
 $M ingame --selftest --out /tmp/look              # assert the renderer, then look
 $M ingame --control cow --control both --source game.jar --out /tmp/look
-$M ingame --model my_model.json --texture out/sprite.png --out /tmp/look/mine.png
+$M model --jar game.jar --texture textures/entity/sheep/sheep.png --emit-spec mine.json
+$M ingame --model mine.json --source game.jar --view front34 --out /tmp/look/mine.png
 $M ingame --block anvil_undamaged --source game.jar --out /tmp/look/anvil.png
 ```
 
 Then read the PNG back with the image reader. A render nobody looked at is not a
 check, and "it should be fine" is not a delivery.
 
-### Look at a control before you look at your own work
+### Render it the game's way, then read the picture back
 
-This renderer has been wrong four separate times, and every time it produced a
-picture that looked plausible. So the rule is not "look at the render"; it is
-"render a vanilla asset with the same code, in the same session, and look at
-that first". If the vanilla cow does not come out a cow, your own render means
-nothing. `--control` is that control, and `--selftest` is the half a
-machine can check.
+That part is not optional. What *is* optional is rendering a vanilla asset every
+single time: do that when the renderer is new, when it changed, or when a render
+looks off. It is a calibration, not a ritual — this renderer has been wrong four
+separate times and every time it produced a picture that looked plausible, so
+when in doubt spend the four seconds and look at the vanilla cow first.
 
-### The four ways a renderer lies, so they are not re-learned
+`--selftest` is the cheap half and is worth running every time, because it is
+arithmetic rather than a picture. `--control` is the expensive half: look at it
+when it matters.
+
+### The ways this renderer lied, so they are not re-learned
 
 | the bug | what it looked like |
 |---|---|
@@ -159,8 +163,9 @@ machine can check.
 | a part rotated *about* its pivot instead of translated to it and rotated about its own origin | the cow's body floating off its legs, two thirds of the sheep's legs swallowed by the body |
 | a private left-handed camera, instead of the game's own axes | the whole scene subtly wrong, mobs facing the wrong way |
 | a translucent layer blended with depth writes off | a slime turned black: every back face came through and stacked |
+| the bytecode stores radians and the renderer speaks degrees | the torso stands on end: a sheep that still reads as a sheep, with its body pointing at the sky |
 
-A fifth was not the renderer but the model: the slime was assumed to be one
+One more was not the renderer but the model: the slime was assumed to be one
 16-cube, so its six faces were painted where the game samples nothing -- at
 `u=16` where vanilla is at `u=0` -- and the old check passed, because
 "is the atlas 64x32 and are six faces filled" was the only question it asked.
@@ -172,6 +177,19 @@ model corner landing top-left on screen carries the texture rect's top-left uv,
 reporting the uv it actually found when it does not. A test that can only pass is
 not a test, so `tests/test_ingame.py` injects the broken order and requires
 the failure.
+
+### The spec is generated, never typed
+
+`mc-art model --emit-spec` closes the loop: bytecode to a full render spec
+(parts, pivots, boxes and pose) to `mc-art ingame --model`. The spec carries
+its own `units` field, so the angle convention is not something to remember, and
+the recovery is checked by rendering it — the emitted sheep spec and the shipped
+`sheep_skin()` control produce byte-identical images.
+
+That matters because a hand-typed spec fails silently. The one written while
+building this lost two of a sheep's four legs and still rendered a perfectly
+plausible animal. So `ingame` prints the part inventory before it draws: **count
+the parts**, and if the line says four, the picture is being polite to you.
 
 ### What the two model paths need
 

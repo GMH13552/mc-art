@@ -9,7 +9,10 @@ and its legs six pixels too tall.
 import json
 from pathlib import Path
 
-from mc_art.vanilla_model import boxes_for_class, layout_document
+import numpy as np
+
+from mc_art.vanilla_model import (boxes_for_class, layout_document, render_spec,
+                                   transform_fields)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -29,8 +32,8 @@ def _source(*fixtures):
     return lookup
 
 
-SHEEP = ("sheep_bqp", "sheep_bqo", "sheep_bqm")
-COW = ("cow_bpn", "sheep_bqm")
+SHEEP = ("sheep_bqp", "sheep_bqo", "sheep_bqm", "renderer_brs")
+COW = ("cow_bpn", "sheep_bqm", "renderer_brs")
 
 
 def test_skin_boxes_come_out_of_the_constructor():
@@ -109,3 +112,39 @@ def test_layout_document_is_loadable():
     assert len(regions) == 6 * len(boxes)
     assert {r.part_id for r in regions} == {"a", "b", "c", "d", "e", "f"}
     assert all(r.preview_instances and min(r.preview_instances[0][2:]) > 0 for r in regions)
+
+
+def test_transform_fields_are_derived_from_the_field_table():
+    """setRotationPoint is the method that writes three floats, and the angle
+    fields are the three floats declared right after them. Nothing here is a
+    literal a/b/c, so it survives a different obfuscation mapping."""
+    text = (FIXTURES / "javap_renderer_brs.txt").read_text(encoding="utf-8")
+    point, angles = transform_fields(text)
+    assert point == ["c", "d", "e"]
+    assert angles == ["f", "g", "h"]
+
+
+def test_the_pose_comes_back_in_degrees():
+    # Math.PI / 2 is 1.5707964f in the bytecode; the renderer speaks degrees
+    spec = render_spec(_source(*SHEEP), "bqp")
+    body = {part["name"]: part for part in spec["parts"]}["b"]
+    assert body["rot"] == {"x": 90.0}
+
+
+def test_the_emitted_spec_has_every_leg():
+    # the hand-typed spec that silently lost two legs is why this is generated
+    spec = render_spec(_source(*SHEEP), "bqp")
+    assert [part["name"] for part in spec["parts"]] == ["a", "b", "c", "d", "e", "f"]
+    assert all(len(part["boxes"]) == 1 for part in spec["parts"])
+
+
+def test_the_emitted_spec_agrees_with_the_reference_model():
+    """The whole chain, measured in the renderer's own space.
+
+    A radians/degrees mix-up is silent -- the torso simply stands on end and the
+    picture still reads as an animal -- so compare the extent instead.
+    """
+    from mc_art.ingame import scene_bbox, sheep_skin
+
+    spec = render_spec(_source(*SHEEP), "bqp")
+    assert np.allclose(scene_bbox([spec])[1], scene_bbox([sheep_skin()])[1])

@@ -523,6 +523,18 @@ VIEWS = {
 }
 
 
+def describe(model):
+    """A one-line inventory of what is about to be drawn.
+
+    A spec is easy to hand-write and easy to under-write: one that silently lost
+    two of a sheep's legs still renders a perfectly plausible animal, and the
+    missing parts only show up if someone counts.
+    """
+    names = [part["name"] for part in model["parts"]]
+    boxes = sum(len(part["boxes"]) for part in model["parts"])
+    return "%d part(s), %d box(es): %s" % (len(names), boxes, ", ".join(names))
+
+
 def _quadruped(texture, head_box, body_box, leg_box):
     head = {"name": "head", "pivot": (0, 6, -8), "rot": {}, "boxes": [head_box]}
     body = {"name": "body", "pivot": (0, 5, 2), "rot": {"x": 90.0}, "boxes": [body_box]}

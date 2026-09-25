@@ -18,6 +18,7 @@ the artwork the recovered boxes actually claim.
 
 from __future__ import annotations
 
+import math
 import re
 import shutil
 import subprocess
@@ -36,8 +37,13 @@ __all__ = [
     "layout_document",
     "models_for_class",
     "models_for_texture",
+    "method_blocks",
     "parse_constructor",
+    "pose_constants",
+    "render_spec",
+    "renderer_of",
     "resolve_model",
+    "transform_fields",
 ]
 
 _OP_RE = re.compile(r"^\s+(\d+):\s+(\S+)(?:\s+(.*))?$")
@@ -231,8 +237,14 @@ def parse_constructor(text: str, cls: str, args: list[Any] | None = None):
             if op in _ARITH:
                 b, a = pop(), pop()
                 stack.append(_arith(a, b, op))
-            elif op in ("i2f", "f2i", "i2d", "d2i"):
-                stack.append(_Unknown("cast"))
+            elif op in ("i2f", "i2d", "i2l", "f2i", "f2d", "f2l",
+                        "d2i", "d2f", "d2l", "l2i", "l2f", "l2d"):
+                # a numeric conversion consumes its operand; forgetting the pop
+                # shifts the whole stack by one and the receiver for the next
+                # call is read off the wrong slot
+                value = pop()
+                stack.append(float(value) if isinstance(value, (int, float))
+                             else _Unknown("cast"))
             elif op == "dup":
                 stack.append(stack[-1] if stack else _Unknown("dup"))
             elif op == "dup_x1":
@@ -295,6 +307,229 @@ def _new_classes(text: str, cls: str) -> list[str]:
         if decoded and decoded[0] == "new" and decoded[1] not in out:
             out.append(decoded[1])
     return out
+
+
+# --------------------------------------------------------------------------
+# the pose, which lives in setRotationAngles rather than the constructor
+# --------------------------------------------------------------------------
+
+_FIELD_RE = re.compile(r"^\s+(?:public|protected|private)\s+(?:static\s+)?(?:final\s+)?"
+                       r"([\w.$\[\]]+)\s+(\w+);\s*$")
+
+
+def method_blocks(text):
+    """[(name, arg list as printed, atoms)] -- keeping the arg list, because an
+    obfuscated class overloads one name for several methods."""
+    out, cur = [], None
+    for line in text.splitlines():
+        match = _OP_RE.match(line)
+        if match:
+            if cur is not None:
+                cur[2].append((match.group(2), (match.group(3) or "").strip()))
+            continue
+        stripped = line.rstrip()
+        if stripped.startswith("  ") and not stripped.startswith("      ") \
+                and "(" in stripped and stripped.endswith(");"):
+            head = stripped.strip()
+            name = head.split("(")[0].split()[-1].rsplit(".", 1)[-1]
+            cur = [name, head[head.index("(") + 1:head.rindex(")")], []]
+            out.append(cur)
+    return out
+
+
+def declared_fields(text):
+    """[(type, name)] in declaration order."""
+    out = []
+    for line in text.splitlines():
+        match = _FIELD_RE.match(line)
+        if match:
+            out.append((match.group(1), match.group(2)))
+    return out
+
+
+def _fields_written(atoms):
+    out = []
+    for op, raw in atoms:
+        if op != "putfield":
+            continue
+        body = raw.split("//", 1)[1].strip() if "//" in raw else raw
+        match = re.match(r"Field (?:[\w/$]+\.)?(\w+):", body)
+        if match and match.group(1) not in out:
+            out.append(match.group(1))
+    return out
+
+
+def transform_fields(renderer_text):
+    """(rotation point fields, rotation angle fields) for one ModelRenderer.
+
+    setRotationPoint is the method that writes exactly three floats, and in the
+    renderer's own field order the three angle fields sit immediately after the
+    three point fields -- so this is derived, never a hard-coded a/b/c.
+    """
+    floats = [name for kind, name in declared_fields(renderer_text) if kind == "float"]
+    point = None
+    for _name, args, atoms in method_blocks(renderer_text):
+        if args.strip() != "float, float, float":
+            continue
+        written = _fields_written(atoms)
+        if len(written) == 3:
+            point = written
+            break
+    if point is None or point[-1] not in floats:
+        return None, None
+    index = floats.index(point[-1])
+    angles = floats[index + 1:index + 4]
+    return (point, angles if len(angles) == 3 else None)
+
+
+def _constant_value(atom):
+    op, raw = atom
+    body = raw.split("//", 1)[1].strip() if "//" in raw else raw.strip()
+    if op == "ldc" and body.startswith("float "):
+        return float(body[6:].rstrip("f"))
+    if op.startswith("fconst_"):
+        return float(op.split("_")[1])
+    if op == "iconst_m1":
+        return -1.0
+    if op.startswith("iconst_"):
+        return float(op.split("_")[1])
+    if op in ("bipush", "sipush") and body.lstrip("-").isdigit():
+        return float(body)
+    return None
+
+
+def _receiver_field(atoms, index):
+    """The model field a putfield assigns into, for an assignment of the shape
+    aload_0 / getfield X / const / putfield renderer.angle."""
+    for step in range(2, 5):
+        position = index - step
+        if position < 0:
+            return None
+        op, raw = atoms[position]
+        if op == "aload_0":
+            return None
+        if op == "getfield":
+            body = raw.split("//", 1)[1].strip() if "//" in raw else raw
+            match = re.match(r"Field (\w+):", body)
+            if match:
+                return match.group(1)
+    return None
+
+
+def super_of(source: Callable[[str], str], cls: str):
+    """The class this one extends, as javap prints it."""
+    try:
+        text = source(cls)
+    except KeyError:
+        return None
+    for line in text.splitlines()[:4]:
+        if " extends " in line:
+            name = line.split(" extends ")[1].split()[0].strip("{").strip()
+            return None if name in ("java.lang.Object", "Object") else name
+    return None
+
+
+def pose_constants(source: Callable[[str], str], cls: str, renderer: str, angles, depth=0):
+    """Rotation angles the model's setRotationAngles assigns a bare constant to.
+
+    A per-frame term (headPitch times 0.017) never lands here: the write is
+    preceded by arithmetic rather than by the constant, so it is skipped and that
+    part keeps the neutral pose. What is left is the posing the model applies
+    unconditionally -- a quadruped's torso is the one that matters.
+    """
+    if not angles or depth > 5:
+        return {}
+    axis_of = dict(zip(angles, ("x", "y", "z")))
+    owners = (renderer, renderer.replace(".", "/"))
+    # a pose is usually set by a base class and merely extended by the concrete
+    # one (ModelQuadruped poses the torso, ModelSheep1 only adds head tracking),
+    # so walk up and let the most derived assignment win per axis
+    out: dict[str, dict[str, float]] = {}
+    parent = super_of(source, cls)
+    if parent and depth < 5:
+        out = pose_constants(source, parent, renderer, angles, depth + 1)
+    try:
+        blocks = method_blocks(source(cls))
+    except KeyError:
+        # a partial jar, or a fixture set that stops at the model base class
+        return out
+    for _name, args, atoms in blocks:
+        if not args.strip().startswith("float, float, float, float, float, float"):
+            continue
+        for index, (op, raw) in enumerate(atoms):
+            if op != "putfield" or index == 0:
+                continue
+            body = raw.split("//", 1)[1].strip() if "//" in raw else raw
+            match = re.match(r"Field ([\w/$]+)\.(\w+):F$", body)
+            if not match or match.group(1) not in owners:
+                continue
+            axis = axis_of.get(match.group(2))
+            if axis is None:
+                continue
+            value = _constant_value(atoms[index - 1])
+            if value is None:
+                continue
+            target = _receiver_field(atoms, index)
+            if target:
+                out.setdefault(target, {})[axis] = value
+    return out
+
+
+# a ModelRenderer's own constructor is the (ModelBase, int, int) one; a nested
+# model class would instead be seen calling it, so accept either
+_RENDERER_CTOR_ARGS = re.compile(r"^[\w.$]+, int, int$")
+
+
+def renderer_of(source: Callable[[str], str], cls: str):
+    """The ModelRenderer class a model constructs."""
+    for candidate in _new_classes(source(cls), cls):
+        simple = candidate.replace("/", ".").rsplit(".", 1)[-1]
+        for name, args, atoms in method_blocks(source(candidate)):
+            if name == simple and _RENDERER_CTOR_ARGS.match(args.strip()):
+                return candidate
+            for op, raw in atoms:
+                decoded = _decode(op, raw)
+                if decoded and decoded[0] == "call" and _RENDERER_RE.match(decoded[3]):
+                    return candidate
+    return None
+
+
+def render_spec(source: Callable[[str], str], cls: str, *, texture=None, tex_size=(64, 32)):
+    """A model as the in-game renderer wants it: parts, pivots, boxes and pose.
+
+    This is the bridge from bytecode to mc-art ingame, and it exists so that a
+    render spec is never hand-typed: the hand-typed one lost two of a sheep's
+    legs and still produced a plausible picture.
+    """
+    renderer = renderer_of(source, cls)
+    angles = None
+    if renderer:
+        _points, angles = transform_fields(source(renderer))
+    pose = pose_constants(source, cls, renderer, angles) if renderer else {}
+    parts = []
+    for field, part in sorted(resolve_model(source, cls).items()):
+        boxes = []
+        for u, v, x, y, z, w, h, d, delta in part.get("boxes", []):
+            if not all(isinstance(value, int) for value in (u, v, w, h, d)):
+                continue
+            boxes.append({"u": u, "v": v, "at": [x, y, z], "w": w, "h": h, "d": d,
+                          "inflate": float(delta) if isinstance(delta, (int, float)) else 0.0})
+        if boxes:
+            # the bytecode holds radians (Math.PI / 2 is 1.5707964f) and the
+            # renderer speaks degrees, which is a silent, plausible-looking way
+            # to get a sheep whose torso stands on end. Round hard: a float32
+            # pi/2 is 1.5707964, whose degrees are 90.000004, and the model
+            # meant 90.
+            rotation = {axis: round(math.degrees(value), 4)
+                        for axis, value in pose.get(field, {}).items()}
+            parts.append({"name": field,
+                          "pivot": [float(value) for value in (part.get("rot") or (0.0, 0.0, 0.0))],
+                          "rot": rotation,
+                          "boxes": boxes})
+    return {"tex": list(tex_size), "texture": texture, "parts": parts,
+            "units": {"rot": "degrees",
+                      "space": "model space, y down, z backward, 1 unit = 1/16 block"},
+            "source_class": cls, "renderer_class": renderer, "angle_fields": angles}
 
 
 def resolve_model(source: Callable[[str], str], cls: str, args: list[Any] | None = None,

@@ -297,6 +297,8 @@ def _model(args: argparse.Namespace) -> int:
             boxes = boxes_for_class(source.text, args.model_class)
             label = args.model_class
         print("MODEL  %s -> %s" % (label, ", ".join(models)))
+        if not boxes:
+            return 1
         for box in boxes:
             net = box.net_size
             print("  %-8s uv=(%3d,%3d) whd=%d,%d,%d  net=%dx%d  delta=%g%s" % (
@@ -304,20 +306,34 @@ def _model(args: argparse.Namespace) -> int:
                 ("  rot=%s" % (box.rotation,)) if box.rotation else ""))
         if not boxes:
             print("  (no boxes: the model may be built by a class this reader did not reach)")
+        if not boxes:
             return 1
+        width = args.texture_width
+        height = args.texture_height
+        if args.texture and (width is None or height is None):
+            found = _texture_size(source, args.texture)
+            if found:
+                width, height = found
         if args.out:
-            width = args.texture_width
-            height = args.texture_height
-            if args.texture and (width is None or height is None):
-                found = _texture_size(source, args.texture)
-                if found:
-                    width, height = found
             document = layout_document(
                 boxes, name=Path(args.out).stem, source="%s (%s)" % (label, ", ".join(models)),
                 texture_width=width or 64, texture_height=height or 32)
             Path(args.out).write_text(json.dumps(document, indent=1) + chr(10), encoding="utf-8")
             print("LAYOUT -> %s" % args.out)
             print("NEXT   -> mc-art uv --layout %s --texture <%s> --out <dir>" % (args.out, label))
+        if args.emit_spec:
+            from .vanilla_model import render_spec
+
+            model_class = args.model_class or models[0]
+            spec = render_spec(source.text, model_class, texture=args.texture,
+                               tex_size=(width or 64, height or 32))
+            Path(args.emit_spec).write_text(json.dumps(spec, indent=1) + chr(10), encoding="utf-8")
+            print("SPEC   -> %s" % args.emit_spec)
+            print("PARTS  -> %s" % ", ".join(part["name"] for part in spec["parts"]))
+            for part in spec["parts"]:
+                if part["rot"]:
+                    print("POSE   -> %s %s" % (part["name"], part["rot"]))
+            print("NEXT   -> mc-art ingame --model %s --source <same jar> --out <dir>" % args.emit_spec)
     return 0
 
 
@@ -387,7 +403,14 @@ def _ingame(args: argparse.Namespace) -> int:
         else:
             print("--model needs either --source or a --texture file path")
             return 1
+        if not texture:
+            print("the spec has no 'texture' key and no --texture was given, so there is "
+                  "nothing to sample; --emit-spec writes the path for you")
+            return 1
         try:
+            from .ingame import describe
+
+            print("MODEL   %s" % describe(spec))
             view = args.view[0] if args.view else "front34"
             camera = fit_camera(spec, VIEWS[view], viewport=viewport)
             print("ENTITY  %s" % render_entity(
@@ -487,6 +510,8 @@ def build_parser() -> argparse.ArgumentParser:
     model.add_argument("--texture", help="texture path inside the jar, e.g. textures/entity/sheep/sheep.png")
     model.add_argument("--model-class", help="read this obfuscated model class directly")
     model.add_argument("--out", help="write a layout document here")
+    model.add_argument("--emit-spec", metavar="FILE",
+                       help="write the full render spec (parts, pivots, boxes, pose) for mc-art ingame")
     model.add_argument("--texture-width", type=int)
     model.add_argument("--texture-height", type=int)
     model.set_defaults(handler=_model)
