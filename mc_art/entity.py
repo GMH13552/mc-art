@@ -117,9 +117,16 @@ def load_spec(payload: Any) -> dict[str, Any]:
         parts.append({"name": name,
                       "pivot": _triple(raw.get("pivot"), "%s pivot" % name),
                       "rot": rotation, "boxes": boxes})
-    return {"name": str(payload.get("name") or "entity").strip(),
+    spec = {"name": str(payload.get("name") or "entity").strip(),
             "tex": [_positive(tex[0], "tex width"), _positive(tex[1], "tex height")],
             "parts": parts}
+    # pass the provenance through: a spec that came out of the game keeps the
+    # texture it was read from and the units it was written in, so replanning it
+    # does not quietly strand the next command
+    for key in ("texture", "units", "source_class", "renderer_class"):
+        if key in payload:
+            spec[key] = payload[key]
+    return spec
 
 
 def box_net(box: dict[str, Any]) -> tuple[int, int]:

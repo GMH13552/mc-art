@@ -139,3 +139,21 @@ def test_write_plan_leaves_a_spec_the_renderer_can_read(tmp_path):
 def test_a_malformed_spec_is_rejected(bad):
     with pytest.raises(ValueError):
         load_spec(bad)
+
+
+def test_a_spec_keeps_where_it_came_from():
+    """Replanning a spec that came out of the game must not strand the next
+    command: the texture path and the angle unit travel with it."""
+    payload = json.loads(json.dumps(MOB))
+    payload["texture"] = "textures/entity/sheep/sheep.png"
+    payload["units"] = {"rot": "degrees"}
+    result = plan(payload)
+    assert result["spec"]["texture"] == "textures/entity/sheep/sheep.png"
+    assert result["spec"]["units"] == {"rot": "degrees"}
+
+
+def test_the_canvas_never_shrinks_below_what_was_declared():
+    payload = json.loads(json.dumps(MOB))
+    payload["tex"] = [128, 64]
+    result = plan(payload)
+    assert result["canvas"] == [128, 64]
