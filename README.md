@@ -39,12 +39,19 @@ paths).
 | path | |
 |---|---|
 | `SKILL.md` | the procedure the model follows, and the plan contract |
-| `bin/mc-art` | the whole tool surface: scan / evidence / render / measure |
-| `mc_art/` | the engine — 18 modules, Pillow + stdlib, never touches a network |
+| `bin/mc-art` | the whole tool surface: scan / evidence / render / pack / measure / model / ingame |
+| `mc_art/` | the engine — 20 modules, Pillow + stdlib, never touches a network |
 | `examples/` | a working plan whose contour came out pixel-identical to vanilla |
-| `layouts/` | shipped vanilla UV layouts |
+| `layouts/` | shipped vanilla UV layouts, two of them recovered from ModelSheep1/2 bytecode |
 | `scripts/` | magnify / review_family / continuity |
-| `tests/` | 60 tests over the engine |
+| `tests/` | 96 tests over the engine |
+
+Two modules are worth calling out. `vanilla_model` reads an entity model out of
+compiled, usually obfuscated bytecode, because a 1.12 asset root has no entity
+model files at all. `ingame` renders a block or entity model the way the game
+does — same axes, same lighting, same UV corner order — so a delivery can be
+looked at in the game's own view before it ships, with the vanilla cow, sheep and
+slime shipped as controls that have to come out right first.
 
 ## Why there is no model inside
 

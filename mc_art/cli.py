@@ -333,10 +333,86 @@ def _texture_size(source, relative: str):
     return Image.open(io.BytesIO(blob)).size
 
 
+def _ingame(args: argparse.Namespace) -> int:
+    """Render the game's own view of a model, so a delivery can be looked at."""
+    from .ingame import (CONTROLS, VIEWS, Camera, TextureSource, fit_camera,
+                         load_block_model, render_block_model, render_entity,
+                         render_views, selftest)
+
+    viewport = (args.width, args.height)
+    out = Path(args.out)
+
+    if args.selftest:
+        ok, detail, files = selftest(None, out, viewport=viewport)
+        print("SELFTEST %s  %s" % ("PASS" if ok else "FAIL", detail))
+        for name in files:
+            print("GLCONTROL %s" % name)
+        return 0 if ok else 1
+
+    if args.control:
+        names = sorted(CONTROLS) if "all" in args.control else args.control
+        if not args.source:
+            print("--control needs --source (the jar or asset root holding the textures)")
+            return 1
+        views = tuple(args.view) if args.view else ("front34", "side")
+        with TextureSource(args.source) as source:
+            for name in names:
+                if name not in CONTROLS:
+                    print("unknown control %s; have %s" % (name, ", ".join(sorted(CONTROLS))))
+                    return 1
+                for written in render_views(name, source, out, views=views, viewport=viewport):
+                    print("CONTROL %s" % written)
+        return 0
+
+    if args.block:
+        if not args.source:
+            print("--block needs --source")
+            return 1
+        with TextureSource(args.source) as source:
+            model = load_block_model(source, args.block)
+            camera = Camera(_point(args.frm, (2.0, -0.55, 1.75)),
+                            _point(args.at, (0.5, 0.5, 0.42)), viewport=viewport)
+            print("BLOCK   %s" % render_block_model(model, source, out, camera))
+        return 0
+
+    if args.model:
+        spec = json.loads(Path(args.model).read_text(encoding="utf-8"))
+        if args.source:
+            source = TextureSource(args.source)
+            texture = spec.get("texture") or args.texture
+        elif args.texture:
+            path = Path(args.texture)
+            source = TextureSource(path.parent)
+            texture = path.name
+        else:
+            print("--model needs either --source or a --texture file path")
+            return 1
+        try:
+            view = args.view[0] if args.view else "front34"
+            camera = fit_camera(spec, VIEWS[view], viewport=viewport)
+            print("ENTITY  %s" % render_entity(
+                [(spec, texture, (1.0, 1.0, 1.0))], source, out, camera))
+        finally:
+            source.close()
+        return 0
+
+    print("nothing to render: pass --selftest, --control, --block or --model")
+    return 1
+
+
+def _point(text, default):
+    if not text:
+        return default
+    parts = [float(value) for value in text.split(",")]
+    if len(parts) != 3:
+        raise SystemExit("a camera point needs three comma separated numbers")
+    return tuple(parts)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mc_art",
-        description="Deterministic Minecraft art engine. Scan, evidence, render, pack, measure — no model inside.",
+        description="Deterministic Minecraft art engine. Scan, evidence, render, pack, measure, recover models from bytecode, render the game view — no model inside.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -414,6 +490,25 @@ def build_parser() -> argparse.ArgumentParser:
     model.add_argument("--texture-width", type=int)
     model.add_argument("--texture-height", type=int)
     model.set_defaults(handler=_model)
+
+    ingame = sub.add_parser(
+        "ingame",
+        help="render the game's own view of a model, so a delivery is looked at before it ships")
+    ingame.add_argument("--selftest", action="store_true",
+                        help="assert the quad corner order and write the glyph control")
+    ingame.add_argument("--control", action="append", metavar="NAME",
+                        help="cow / sheep / wool / both / slime / all -- render a known-good control first")
+    ingame.add_argument("--block", metavar="NAME", help="a block model under models/block/")
+    ingame.add_argument("--model", metavar="SPEC.json", help="an entity model spec")
+    ingame.add_argument("--source", metavar="PATH", help="game jar, mod jar, or asset directory")
+    ingame.add_argument("--texture", metavar="PATH", help="texture for --model")
+    ingame.add_argument("--out", required=True, help="output image, or directory for --selftest/--control")
+    ingame.add_argument("--view", action="append", metavar="NAME", help="front34 / front / side / back34 / top34")
+    ingame.add_argument("--width", type=int, default=800)
+    ingame.add_argument("--height", type=int, default=560)
+    ingame.add_argument("--from", dest="frm", metavar="X,Y,Z", help="block camera position")
+    ingame.add_argument("--at", metavar="X,Y,Z", help="block camera target")
+    ingame.set_defaults(handler=_ingame)
 
     return parser
 

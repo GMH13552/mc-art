@@ -1,6 +1,6 @@
 ---
 name: mc-art
-description: Use when generating or editing Minecraft pixel art (item/block/entity textures, resource packs), matching a mod's or vanilla's existing style, or auditing generated sprites frame-by-frame. A deterministic engine that scans asset roots, turns images into evidence, rasterises an authored plan and measures the result — every design decision is the caller's.
+description: Use when generating or editing Minecraft pixel art (item/block/entity textures, resource packs), matching a mod's or vanilla's existing style, auditing generated sprites frame-by-frame, or rendering a model the way the game does to check a delivery. A deterministic engine that scans asset roots, turns images into evidence, rasterises an authored plan and measures the result — every design decision is the caller's.
 ---
 
 # Minecraft Art Studio
@@ -48,6 +48,11 @@ $M render --plan my.plan.json --out outputs/mine
 #
 # 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
 #    $M pack --manifest pack.json --out pack/     see "Traps" #3
+#
+# 8. BEFORE HANDING OVER: render the model the way the game does, control
+#    first, and look at it. An atlas can be perfect and the mob still wrong.
+#    $M ingame --selftest --out /tmp/look
+#    $M ingame --control cow --source game.jar --out /tmp/look
 #
 # 7. For an entity: read its box unwrap out of the model code, or author one.
 #    No model yet? The layout you author IS the contract the Java must match.
@@ -119,6 +124,76 @@ JSON, a previous run, or memory. Then answer:
 - **Failures** — anything that did not render: say what stage died and why.
 
 Fix before reporting, and say what you changed.
+
+## Before you hand it over: look at it in the game's view
+
+An atlas can land on exactly the right rects and the mob can still be wrong: a
+layer that shows through, a part buried inside another part, a face nobody ever
+sees, a body that reads as a slab. Nothing above catches any of that, because
+everything above is flat. So the last look is a render of the model itself.
+
+```bash
+$M ingame --selftest --out /tmp/look              # assert the renderer, then look
+$M ingame --control cow --control both --source game.jar --out /tmp/look
+$M ingame --model my_model.json --texture out/sprite.png --out /tmp/look/mine.png
+$M ingame --block anvil_undamaged --source game.jar --out /tmp/look/anvil.png
+```
+
+Then read the PNG back with the image reader. A render nobody looked at is not a
+check, and "it should be fine" is not a delivery.
+
+### Look at a control before you look at your own work
+
+This renderer has been wrong four separate times, and every time it produced a
+picture that looked plausible. So the rule is not "look at the render"; it is
+"render a vanilla asset with the same code, in the same session, and look at
+that first". If the vanilla cow does not come out a cow, your own render means
+nothing. `--control` is that control, and `--selftest` is the half a
+machine can check.
+
+### The four ways a renderer lies, so they are not re-learned
+
+| the bug | what it looked like |
+|---|---|
+| the quad read top-left-then-clockwise instead of `TexturedQuad`'s `(u2,v1) (u1,v1) (u1,v2) (u2,v2)` | every face rotated 180 degrees and mirrored -- a smeared cow that was still recognisably a cow |
+| a part rotated *about* its pivot instead of translated to it and rotated about its own origin | the cow's body floating off its legs, two thirds of the sheep's legs swallowed by the body |
+| a private left-handed camera, instead of the game's own axes | the whole scene subtly wrong, mobs facing the wrong way |
+| a translucent layer blended with depth writes off | a slime turned black: every back face came through and stacked |
+
+A fifth was not the renderer but the model: the slime was assumed to be one
+16-cube, so its six faces were painted where the game samples nothing -- at
+`u=16` where vanilla is at `u=0` -- and the old check passed, because
+"is the atlas 64x32 and are six faces filled" was the only question it asked.
+The question that catches it is **is every opaque texel inside some box rect**.
+
+Two of these were caught by arithmetic, not by the eye. That is what
+`--selftest` is for: it stamps a glyph on a known face and asserts that the
+model corner landing top-left on screen carries the texture rect's top-left uv,
+reporting the uv it actually found when it does not. A test that can only pass is
+not a test, so `tests/test_ingame.py` injects the broken order and requires
+the failure.
+
+### What the two model paths need
+
+Blocks are data: `--block` reads the element list, the per-face uv, texture
+and rotation, and the parent chain, so nothing is guessed. Note that the entry
+model matters and versions differ -- 1.12's `anvil.json` holds only geometry
+and it is `anvil_undamaged.json` that supplies `#body` and `#top`; block art
+also moved from `textures/blocks` to `textures/block` in 1.13, so the
+resolver tries both.
+
+Entities are code. `--model` takes
+`{"tex":[64,32],"parts":[{"name","pivot","rot","boxes":[{"u","v","at","w","h","d","inflate"}]}]}`,
+where `at` is `addBox`'s offset, `pivot` is `SetRotationPoint` and `inflate` is the
+delta. `mc-art model` recovers all of that from bytecode except the pose:
+`rot` is per-frame, set in `setRotationAngles`, and the shipped controls carry
+the one constant that matters (a quadruped torso is `body.rotateAngleX = 90`,
+which is why forgetting it lays the cow out flat).
+
+Mind the axes, because that is where the fourth bug lived: model space is
+**y down, z backward**, one unit is 1/16 block, and the renderer converts to the
+game's world (x east, y up, z south) exactly as `RendererLivingEntity` does.
+A mob at yaw 0 faces south, so its front is the +z side.
 
 ## Traps that bit a real asset
 
