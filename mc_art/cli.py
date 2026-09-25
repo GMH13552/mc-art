@@ -279,12 +279,51 @@ def _uv(args: argparse.Namespace) -> int:
     return 0
 
 
+def _model_from_java(args: argparse.Namespace) -> int:
+    """Read a hand-written or generated model class back into a spec."""
+    from .modjava import class_name_from, parse
+
+    source = Path(args.java).read_text(encoding="utf-8")
+    name = class_name_from(args.java)
+    spec = parse(source, name=name)
+    boxes = sum(len(part["boxes"]) for part in spec["parts"])
+    print("JAVA   %s -> %d part(s) %d box(es)" % (args.java, len(spec["parts"]), boxes))
+    for part in spec["parts"]:
+        for box in part["boxes"]:
+            print("  %-12s uv=(%3d,%3d) whd=%d,%d,%d  at=%s" % (
+                part["name"], box["u"], box["v"], box["w"], box["h"], box["d"],
+                tuple(box["at"])))
+    if args.emit_spec:
+        Path(args.emit_spec).write_text(json.dumps(spec, indent=1) + chr(10), encoding="utf-8")
+        print("SPEC   -> %s" % args.emit_spec)
+        print("NEXT   -> mc-art entity --spec %s --out <dir>" % args.emit_spec)
+    return 0
+
+
 def _model(args: argparse.Namespace) -> int:
     """Read an entity model out of compiled game code instead of guessing it."""
     from .vanilla_model import (JarSource, boxes_for_class, boxes_for_texture,
                                 layout_document, models_for_texture)
 
+    if args.java:
+        return _model_from_java(args)
+    if not args.jar:
+        print("name a source: --jar for a compiled model, or --java for a source file")
+        return 1
+
     with JarSource(args.jar) as source:
+        # the archive-wide modes answer without naming a texture or a class
+        if args.list_models or args.list or args.all or args.all_models:
+            if args.all_models:
+                return 0 if _emit_all_models(source, args) else 1
+            if args.all:
+                return 0 if _emit_all(source, args) else 1
+            if args.list_models:
+                return _list_models(source, args)
+            return _list_textures(source, args)
+        if not args.texture and not args.model_class:
+            print("name something: --texture, --model-class, --list, --list-models, --all or --all-models")
+            return 1
         if args.texture:
             models = models_for_texture(source, args.texture)
             if not models:
@@ -314,6 +353,12 @@ def _model(args: argparse.Namespace) -> int:
             found = _texture_size(source, args.texture)
             if found:
                 width, height = found
+        if args.all_models:
+            written = _emit_all_models(source, args)
+            return 0 if written else 1
+        if args.all:
+            written = _emit_all(source, args)
+            return 0 if written else 1
         if args.out:
             document = layout_document(
                 boxes, name=Path(args.out).stem, source="%s (%s)" % (label, ", ".join(models)),
@@ -369,6 +414,20 @@ def _entity(args: argparse.Namespace) -> int:
             part["name"], tuple(_trim_all(part["pivot"])), part["rot"] or "{}", boxes))
     print("LAYOUT  -> %s" % written["layout"])
     print("SPEC    -> %s" % written["model"])
+    if args.java:
+        from .modjava import emit
+
+        class_name = args.class_name or _model_class_name(spec["name"])
+        source = emit(spec, class_name=class_name, package=args.package or "",
+                      texture=spec.get("texture"))
+        target = Path(args.java)
+        if target.suffix != ".java":
+            target = target / (class_name + ".java")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source, encoding="utf-8")
+        print("JAVA    -> %s" % target)
+        print("          the addBox calls in it are the rectangles above, so the")
+        print("          atlas and the mod cannot drift; --java reads it back")
     if args.atlas:
         from PIL import Image
 
@@ -398,6 +457,133 @@ def _trim_all(values):
         number = float(value)
         out.append(int(number) if number == int(number) else number)
     return out
+
+
+def _model_class_name(name: str) -> str:
+    cleaned = "".join(part.capitalize() for part in str(name).replace("-", "_").split("_") if part)
+    return "Model" + (cleaned or "Entity")
+
+
+def _list_models(source, args) -> int:
+    from .vanilla_model import UnsupportedBytecode, boxes_for_class
+
+    rows = []
+    for cls in source.model_classes():
+        if args.filter and args.filter not in cls:
+            continue
+        try:
+            boxes = boxes_for_class(source.text, cls)
+        except (KeyError, UnsupportedBytecode, ValueError):
+            boxes = []
+        if boxes:
+            rows.append((cls, len({box.part for box in boxes}), len(boxes)))
+    for cls, parts, boxes in rows:
+        print("%-64s %2d part(s) %3d box(es)" % (cls, parts, boxes))
+    print()
+    print("%d model class(es). Next: --model-class <one> --emit-spec FILE" % len(rows))
+    return 0
+
+
+def _list_textures(source, args) -> int:
+    from .vanilla_model import UnsupportedBytecode, boxes_for_texture, models_for_texture
+
+    rows = []
+    for relative in source.textures(filter_text=args.filter):
+        found = models_for_texture(source, relative)
+        if not found:
+            continue
+        try:
+            count = len(boxes_for_texture(source, relative))
+        except (KeyError, UnsupportedBytecode, ValueError):
+            count = 0
+        if count:
+            rows.append((relative, ", ".join(found), count))
+    for relative, model, count in rows:
+        print("%-52s %-16s %2d box(es)" % (relative, model, count))
+    print()
+    print("%d texture(s) with a model. Next: --all --out DIR" % len(rows))
+    return 0
+
+
+def _safe_name(relative: str) -> str:
+    """A texture path as one flat filename, so a whole project fits in a folder."""
+    stem = relative[:-4] if relative.endswith(".png") else relative
+    for prefix in ("textures/entity/", "textures/entities/", "textures/"):
+        if stem.startswith(prefix):
+            stem = stem[len(prefix):]
+            break
+    return stem.replace("/", "__").replace(" ", "_")
+
+
+def _emit_all(source, args) -> int:
+    """Emit a render spec for every texture in the archive that has a model."""
+    from .vanilla_model import UnsupportedBytecode, render_spec
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    written = failed = 0
+    for relative in source.textures(filter_text=args.filter):
+        found = models_for_texture(source, relative)
+        if not found:
+            continue
+        size = _texture_size(source, relative) or (64, 32)
+        try:
+            spec = render_spec(source.text, found[0], texture=relative, tex_size=size)
+        except (KeyError, UnsupportedBytecode, ValueError) as error:
+            print("  SKIP   %-46s %s" % (relative, error))
+            failed += 1
+            continue
+        if not spec["parts"]:
+            failed += 1
+            continue
+        target = out / (_safe_name(relative) + ".json")
+        target.write_text(json.dumps(spec, indent=1) + chr(10), encoding="utf-8")
+        parts = len(spec["parts"])
+        boxes = sum(len(part["boxes"]) for part in spec["parts"])
+        pose = ", ".join("%s %s" % (part["name"], part["rot"])
+                         for part in spec["parts"] if part["rot"])
+        print("  SPEC   %-46s %-14s %2d part(s) %2d box(es) %sx%s %s" % (
+            relative, spec["renderer_class"], parts, boxes, size[0], size[1], pose))
+        written += 1
+    print()
+    print("%d spec(s) written to %s, %d texture(s) had no reachable model"
+          % (written, out, failed))
+    if written:
+        print("NEXT -> mc-art ingame --model %s --source <same source> --out <dir>"
+              % (out / (_safe_name(source.textures(filter_text=args.filter)[0]) + ".json")))
+    return written
+
+
+def _emit_all_models(source, args) -> int:
+    """Emit a spec for every model class the archive builds, texture unknown.
+
+    This is the route for a project whose textures are registered at runtime:
+    the models are findable by shape, and the caller pairs a texture with each
+    spec by passing --texture when they render it.
+    """
+    from .vanilla_model import UnsupportedBytecode, render_spec
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for cls in source.model_classes():
+        if args.filter and args.filter not in cls:
+            continue
+        try:
+            spec = render_spec(source.text, cls)
+        except (KeyError, UnsupportedBytecode, ValueError):
+            continue
+        if not spec["parts"]:
+            continue
+        target = out / (cls.replace(".", "__") + ".json")
+        target.write_text(json.dumps(spec, indent=1) + chr(10), encoding="utf-8")
+        boxes = sum(len(part["boxes"]) for part in spec["parts"])
+        print("  SPEC   %-60s %2d part(s) %3d box(es)" % (cls, len(spec["parts"]), boxes))
+        written += 1
+    print()
+    print("%d spec(s) written to %s (no texture recorded; pass --texture when rendering)"
+          % (written, out))
+    return written
 
 
 def _ingame(args: argparse.Namespace) -> int:
@@ -566,10 +752,20 @@ def build_parser() -> argparse.ArgumentParser:
     model = sub.add_parser(
         "model",
         help="read an entity model's boxes out of the jar's own bytecode and emit a layout")
-    model.add_argument("--jar", required=True, help="vanilla, Forge or mod jar holding the model classes")
+    model.add_argument("--jar", help="vanilla, Forge or mod jar holding the model classes")
+    model.add_argument("--java", metavar="FILE", help="read a Java model class instead, for a mod you are writing")
     model.add_argument("--texture", help="texture path inside the jar, e.g. textures/entity/sheep/sheep.png")
     model.add_argument("--model-class", help="read this obfuscated model class directly")
     model.add_argument("--out", help="write a layout document here")
+    model.add_argument("--list", action="store_true",
+                       help="list every texture in the archive that a model draws")
+    model.add_argument("--all", action="store_true",
+                       help="emit a render spec for every such texture into --out")
+    model.add_argument("--list-models", action="store_true",
+                       help="list every class in the archive that builds a model (works when paths are built at runtime)")
+    model.add_argument("--all-models", action="store_true",
+                       help="emit a spec for every such model class into --out")
+    model.add_argument("--filter", help="only names containing this")
     model.add_argument("--emit-spec", metavar="FILE",
                        help="write the full render spec (parts, pivots, boxes, pose) for mc-art ingame")
     model.add_argument("--texture-width", type=int)
@@ -603,6 +799,10 @@ def build_parser() -> argparse.ArgumentParser:
     entity.add_argument("--out", required=True, help="directory for layout.json and model.json")
     entity.add_argument("--atlas", metavar="PNG", help="also check a painted atlas against the boxes")
     entity.add_argument("--canvas-width", type=int, help="packing width; defaults to 64 or the widest net")
+    entity.add_argument("--java", metavar="FILE_OR_DIR",
+                        help="also write the mod's model class, so the code and the atlas cannot drift")
+    entity.add_argument("--class-name", help="class to generate; defaults to Model<Name>")
+    entity.add_argument("--package", help="package for the generated class")
     entity.set_defaults(handler=_entity)
 
     return parser

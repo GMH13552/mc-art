@@ -568,11 +568,16 @@ def models_for_class(source: Callable[[str], str], cls: str, depth: int = 2) -> 
         found: list[str] = []
         nxt: list[str] = []
         for candidate in level:
-            recs, _ = parse_constructor(source(candidate), candidate)
+            try:
+                text = source(candidate)
+            except KeyError:
+                # a renderer constructs whatever it likes, including JDK classes
+                continue
+            recs, _ = parse_constructor(text, candidate)
             if recs:
                 found.append(candidate)
             else:
-                for new_class in _new_classes(source(candidate), candidate):
+                for new_class in _new_classes(text, candidate):
                     if new_class not in seen:
                         seen.add(new_class)
                         nxt.append(new_class)
@@ -644,6 +649,49 @@ class JarSource:
         """Every class whose constant pool mentions this texture path."""
         needle = relative.encode()
         return [self._normalise(name) for name, blob in self._scan() if needle in blob]
+
+    def model_classes(self) -> list[str]:
+        """Every class in the archive that builds a ModelRenderer.
+
+        Found by shape rather than by name, because a mod jar may be readable
+        (ModelCoratee) or obfuscated (bqp) and the texture path may never appear
+        as a literal at all -- AoA3 builds its paths in a registry, so asking
+        which class draws a texture finds nothing, while asking which classes
+        are models finds all of them. A model both calls addBox and constructs a
+        renderer, so it carries both descriptors; a renderer carries only the
+        second, and a layer class only the first.
+        """
+        # a model may call either addBox overload: the one that takes an
+        # inflation delta, or the plain one that returns the renderer
+        add_box = re.compile(rb"\(FFFIIIF\)V|\(FFFIII\)L")
+        renderer_ctor = re.compile(rb"\(L[^()]{1,160};II\)V")
+        found = []
+        for name, blob in self._scan():
+            if add_box.search(blob) and renderer_ctor.search(blob):
+                found.append(self._normalise(name))
+        return sorted(found)
+
+    def texture_index(self, prefix: str = "textures/") -> dict[str, list[str]]:
+        """Every texture path the archive mentions, mapped to the classes that
+        mention it. One pass, so a whole project can be enumerated at once
+        instead of being asked about one mob at a time."""
+        index: dict[str, list[str]] = {}
+        for name, blob in self._scan():
+            for found in set(re.findall(rb"[A-Za-z0-9_/]*textures/[A-Za-z0-9_/.]+\.png", blob)):
+                relative = found.decode()
+                if relative.startswith(prefix):
+                    index.setdefault(relative, []).append(self._normalise(name))
+        return index
+
+    def textures(self, prefix: str = "textures/", filter_text: str | None = None) -> list[str]:
+        """Texture paths that both a class mentions and the archive contains."""
+        found = []
+        for relative in sorted(self.texture_index(prefix)):
+            if filter_text and filter_text not in relative:
+                continue
+            if self.texture_bytes(relative) is not None:
+                found.append(relative)
+        return found
 
     def texture_bytes(self, relative: str) -> bytes | None:
         """The raw bytes of a texture path, whichever namespace holds it."""

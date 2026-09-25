@@ -287,6 +287,145 @@ Whatever the mob is, an entity asset is the same three things:
 | `layout.json` | which rectangle of the atlas is which face | falls out of the model |
 | the audit | every opaque texel lands inside a rectangle | `mc-art entity --atlas`, and `mc-art ingame` |
 
+Making the mod is Branch B, and it is not the fallback: when the mob is
+yours, the boxes are the design decision and the layout, the render spec and
+the Java all derive from them.
+
+So there are exactly two branches and only the first line differs.
+
+**Branch A — the model exists.** A vanilla mob, a reskin of one, or a mod that
+shipped its model. Its texture offsets are the game's, not yours to choose:
+
+```bash
+JAR=game.jar
+$M model --jar "$JAR" --texture textures/entity/sheep/sheep.png --emit-spec work/model.json
+$M ingame --model work/model.json --source "$JAR" --out work/atlas_view.png   # look at the net
+# paint into the rectangles the game already reads, then close the loop:
+$M entity --spec work/model.json --out work --atlas work/atlas.png
+$M ingame --model work/model.json --texture work/atlas.png --out work/view.png
+```
+
+Note that there is no entity model file to read. A 1.12 asset root has 878 block
+and 717 item JSONs under `models/` and *zero* entity ones: the geometry is Java,
+and the jar is obfuscated, so `ModelSheep1` is a class called `bqp` that nothing
+in the archive names. `mc-art model` walks texture string → renderer → model →
+constructor bytecode and recovers the boxes, the pivots and the pose from it. It
+needs `javap`, which ships with any JDK.
+
+**Branch B — the model does not exist.** This is the normal case when you are
+*making* the mod: the mob is yours, so the boxes are the design decision and
+everything else derives from them.
+
+```bash
+cat > work/model.json <<'JSON'
+{ "name": "blood_slime", "tex": [64, 32], "parts": [
+    { "name": "gel",  "pivot": [0,0,0], "rot": {}, "boxes": [
+        { "at": [-4,16,-4], "w": 8, "h": 8, "d": 8 } ] },
+    { "name": "core", "pivot": [0,0,0], "rot": {}, "boxes": [
+        { "at": [-3,17,-3], "w": 6, "h": 6, "d": 6 } ] } ] }
+JSON
+
+# layout.json to paint against, model.json to render, and the mod's Java
+$M entity --spec work/model.json --out work --java work/src --class-name ModelBloodSlime
+
+# paint a 64x32 atlas following work/layout.json, then close both loops:
+$M entity --spec work/model.json --out work --atlas work/atlas.png    # PASS / FAIL
+$M ingame --model work/model.json --texture work/atlas.png --out work/view.png
+
+# and if anyone hand-edits the Java, read it back and diff:
+$M model --java work/src/ModelBloodSlime.java --emit-spec work/back.json
+```
+
+The generated class is not scaffolding to throw away. Its `addBox` calls *are*
+the rectangles FENClayout.json` handed you, emitted from the same spec, so the
+atlas and the mod cannot drift — `--java` reads it back into a spec, and
+`tests/test_modjava.py` asserts the round trip is the identity. Change the
+geometry and regenerate; then the diff is a diff, not a debugging session.
+
+`at` is `addBox`'s offset, `pivot` is `SetRotationPoint` and `inflate` is the
+delta. `mc-art model` recovers all of that from bytecode except the pose:
+`rot` is per-frame, set in `setRotationAngles`, and the shipped controls carry
+the one constant that matters (a quadruped torso is `body.rotateAngleX = 90`,
+which is why forgetting it lays the cow out flat).
+
+Mind the axes, because that is where the fourth bug lived: model space is
+**y down, z backward**, one unit is 1/16 block, and the renderer converts to the
+game's world (x east, y up, z south) exactly as `RendererLivingEntity` does.
+A mob at yaw 0 faces south, so its front is the +z side.
+
+## Traps that bit a real asset
+
+From a live eyeball-tree build (a log, a stripped log, planks, leaves, a
+sapling). Each one cost a round trip; none of them is object-specific.
+
+**1. `pattern` sampling copies saturated source pixels verbatim.** On a whole
+block face it pulled 50 of 256 pixels back as the source's own olive-browns,
+which read as dirt on a red tree. `pattern` is for keeping *grain*, and it
+keeps roughly 40% of the source colour to do it. When the target material is
+not the source material, either use `value` (brightness only) or write the
+value bands straight into the plan's `pixel_map` and keep the reference only
+as evidence. Recorded fix: the bands went into `pixel_map`, the reference
+stayed attached so `texture_audit.json` could still measure that the source's
+value rhythm survived.
+
+**2. A repeated pale accent along one line reads as a band.** Several
+`blood_pale` pixels adjacent on a 1px trickle turned it salmon pink. Along any
+one run of accent pixels, allow a single palest value; let the rest take the
+mid tone.
+
+**3. One plan is one texture. A block is often two.** A log needs an end-grain
+file *and* a side file. Building it one plan at a time can only produce
+`cube_all`, which is how a log ended up with its side texture on all six
+faces. Declare the faces instead:
+
+```json
+{ "namespace": "eyeballtree",
+  "textures": { "log": "out/log/sprite.png", "log_top": "out/log_top/sprite.png" },
+  "blocks": [ { "name": "eyeball_log", "model": "cube_column",
+                "faces": { "end": "log_top", "side": "log" }, "item": true } ] }
+```
+
+```bash
+M pack --manifest pack.json --out pack/
+```
+
+It writes the pack, a `FACE_MAP.txt` saying which texture lands on which face,
+and a preview that really separates them. A `cube_column` whose `end` equals
+its `side` is reported as a warning, because that is exactly what one plan per
+texture produces by accident.
+
+**4. The single-plan isometric preview is always `cube_all`.** It does not know
+a block has faces. Do not diagnose a face problem from it — read
+`FACE_MAP.txt` or the model JSON. A user once reported "your stripped log has
+the top face on all six sides"; the pack was correct and the preview was the
+liar.
+
+**5. Sibling assets share a cut face.** A stripped log's top is the *same cut*
+as the barked log's top with the outer ring planed off — not a different
+source tile. Measure it: the live pair came out 77% identical with every
+difference in the outermost ring and zero inside.
+
+**6. Check the family, not just the frames.** `measure` covers frame-to-frame
+agreement. Also confirm, per asset:
+
+- **palette adherence** — no pixel outside the family palette (count them; zero
+  is the target, and a stray source colour shows up here);
+- **material honesty** — no leaf pigment in wood, no bark in leaves, the
+  sapling's trunk drawn from the log's bark ramp;
+- **an accent budget** — decide how many pixels may carry the signature colour
+  (blood, glow) and compare every asset against it;
+- **hue spread** across the wood family — one narrow band, not several.
+
+## Entities: one description, three artefacts, two branches
+
+Whatever the mob is, an entity asset is the same three things:
+
+| artefact | what it is | who makes it |
+|---|---|---|
+| `model.json` | parts, pivots, rotations, boxes with 3D placement | `mc-art model` reads it from bytecode, or you write it |
+| `layout.json` | which rectangle of the atlas is which face | falls out of the model |
+| the audit | every opaque texel lands inside a rectangle | `mc-art entity --atlas`, and `mc-art ingame` |
+
 So there are exactly two branches and only the first line differs.
 
 **Branch A — the model exists.** A vanilla mob, a reskin of one, or a mod that

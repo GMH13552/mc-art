@@ -42,16 +42,16 @@ paths).
 | `bin/mc-art` | the whole tool surface: scan / evidence / render / pack / measure / model / entity / ingame |
 | `mc_art/` | the engine — 20 modules, Pillow + stdlib, never touches a network |
 | `examples/` | a working plan whose contour came out pixel-identical to vanilla |
-| `layouts/` | shipped vanilla UV layouts, two of them recovered from ModelSheep1/2 bytecode |
+| `layouts/` | worked examples. `mc-art model --emit-spec` reads any mob from any jar, so these are references to compare against rather than tables to reach for |
 | `scripts/` | magnify / review_family / continuity |
-| `tests/` | 114 tests over the engine |
+| `tests/` | 123 tests over the engine |
 
-Two modules are worth calling out. `vanilla_model` reads an entity model out of
+Three modules are worth calling out. `vanilla_model` reads an entity model out of
 compiled, usually obfuscated bytecode, because a 1.12 asset root has no entity
 model files at all. `ingame` renders a block or entity model the way the game
 does — same axes, same lighting, same UV corner order — so a delivery can be
 looked at in the game's own view before it ships, with the vanilla cow, sheep and
-slime shipped as controls that have to come out right first.
+slime shipped as controls that have to come out right first. `entity` and `modjava` are the other half: when the mob is one you are making, they turn a single box description into the atlas rectangles and the mod Java model class, so the texture and the code cannot drift.
 
 ## Why there is no model inside
 
