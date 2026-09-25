@@ -39,12 +39,12 @@ paths).
 | path | |
 |---|---|
 | `SKILL.md` | the procedure the model follows, and the plan contract |
-| `bin/mc-art` | the whole tool surface: scan / evidence / render / pack / measure / model / ingame |
+| `bin/mc-art` | the whole tool surface: scan / evidence / render / pack / measure / model / entity / ingame |
 | `mc_art/` | the engine — 20 modules, Pillow + stdlib, never touches a network |
 | `examples/` | a working plan whose contour came out pixel-identical to vanilla |
 | `layouts/` | shipped vanilla UV layouts, two of them recovered from ModelSheep1/2 bytecode |
 | `scripts/` | magnify / review_family / continuity |
-| `tests/` | 100 tests over the engine |
+| `tests/` | 114 tests over the engine |
 
 Two modules are worth calling out. `vanilla_model` reads an entity model out of
 compiled, usually obfuscated bytecode, because a 1.12 asset root has no entity

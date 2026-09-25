@@ -49,17 +49,18 @@ $M render --plan my.plan.json --out outputs/mine
 # 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
 #    $M pack --manifest pack.json --out pack/     see "Traps" #3
 #
-# 8. BEFORE HANDING OVER: render the model the way the game does, control
-#    first, and look at it. An atlas can be perfect and the mob still wrong.
-#    $M ingame --selftest --out /tmp/look
-#    $M ingame --control cow --source game.jar --out /tmp/look
+# 7. For an ENTITY: one description, two branches. See "Entities", below.
+#    Branch A -- the model exists:
+#      $M model --jar "$JAR" --texture textures/entity/sheep/sheep.png --emit-spec work/model.json
+#    Branch B -- the model does not, so write work/model.json yourself:
+#      $M entity --spec work/model.json --out work          # assigns u/v, emits layout.json
+#    Then either way, once the atlas is painted:
+#      $M entity --spec work/model.json --out work --atlas work/atlas.png   # PASS / FAIL
+#      $M ingame --model work/model.json --texture work/atlas.png --out work/view.png
 #
-# 7. For an entity: read its box unwrap out of the model code, or author one.
-#    No model yet? The layout you author IS the contract the Java must match.
-#    $M model --jar game.jar --texture textures/entity/sheep/sheep.png
-#    $M layouts
-#    $M boxes --spec boxes.json --out my_layout.json
-#    $M uv --layout my_layout.json --texture atlas.png --out out/
+# 8. BEFORE HANDING OVER: READ work/view.png. An atlas can land on exactly the
+#    right rectangles and the mob still be wrong.
+#      $M ingame --selftest --out /tmp/look      # asserts the renderer itself
 ```
 
 Step 4 takes about a second and needs no credentials. Iterate as long as the
@@ -276,122 +277,82 @@ agreement. Also confirm, per asset:
   (blood, glow) and compare every asset against it;
 - **hue spread** across the wood family — one narrow band, not several.
 
-## Entity UV: read the model, or author one, then look at it
+## Entities: one description, three artefacts, two branches
 
-An entity atlas is a box unwrap. Do not guess one — and do not bypass the
-engine, which is what a live slime run did before these three commands
-existed.
+Whatever the mob is, an entity asset is the same three things:
 
-**There is no entity model file to read.** A 1.12 asset root has 878 block and
-717 item JSONs under `models/` and *zero* entity ones. A mob's geometry and
-its texture offsets exist only as Java, and the jar you are handed is obfuscated,
-so `ModelSheep1` is a class called `bqp` that nothing in the archive
-names. A layout derived from memory is a guess, and it is wrong in ways the
-preview shows you. Read the bytecode instead — it needs `javap`, which ships
-with any JDK:
+| artefact | what it is | who makes it |
+|---|---|---|
+| `model.json` | parts, pivots, rotations, boxes with 3D placement | `mc-art model` reads it from bytecode, or you write it |
+| `layout.json` | which rectangle of the atlas is which face | falls out of the model |
+| the audit | every opaque texel lands inside a rectangle | `mc-art entity --atlas`, and `mc-art ingame` |
+
+So there are exactly two branches and only the first line differs.
+
+**Branch A — the model exists.** A vanilla mob, a reskin of one, or a mod that
+shipped its model. Its texture offsets are the game's, not yours to choose:
 
 ```bash
-# 0. READ — recover the boxes from the class that draws this texture
-$M model --jar game.jar --texture textures/entity/sheep/sheep_fur.png
-$M model --jar game.jar --texture textures/entity/cow/cow.png --out cow.json
-
-# 1. FIND — the shapes that already ship, with their parts and faces
-$M layouts
-
-# 2. AUTHOR — when nothing fits, state the object as axis-aligned boxes
-$M boxes --spec boxes.json --out my_layout.json
-
-# 3. LOOK — the annotated atlas plus two previews
-$M uv --layout my_layout.json --texture atlas.png --out out/
+JAR=game.jar
+$M model --jar "$JAR" --texture textures/entity/sheep/sheep.png --emit-spec work/model.json
+$M ingame --model work/model.json --source "$JAR" --out work/atlas_view.png   # look at the net
+# paint into the rectangles the game already reads, then close the loop:
+$M entity --spec work/model.json --out work --atlas work/atlas.png
+$M ingame --model work/model.json --texture work/atlas.png --out work/view.png
 ```
 
-`model` prints every `addBox` as texture offset, size and net size. It
-follows the super constructor, because a sheep's four legs belong to
-`ModelQuadruped` and the subclass never mentions them, and it keeps *several
-boxes per part*, because `setTextureOffset` is fluent and returns the renderer:
-`ModelCow` hangs both horns off the head and its udder off the body. The net
-size is the number to check — `2 * depth + 2 * width` by `depth + height`.
+Note that there is no entity model file to read. A 1.12 asset root has 878 block
+and 717 item JSONs under `models/` and *zero* entity ones: the geometry is Java,
+and the jar is obfuscated, so `ModelSheep1` is a class called `bqp` that nothing
+in the archive names. `mc-art model` walks texture string → renderer → model →
+constructor bytecode and recovers the boxes, the pivots and the pose from it. It
+needs `javap`, which ships with any JDK.
 
-**A wool overlay is not the skin model inflated.** That trap cost a round.
-`ModelSheep1` (skin, `sheep.png`) has a `6x6x8` head and `4x12x4` legs;
-`ModelSheep2` (wool, `sheep_fur.png`) has a `6x6x6` head and `4x6x4` legs.
-Same texture offsets, different nets: `28x14` against `24x12` for the head,
-`16x16` against `16x10` for the legs. Lay the fur out on the skin's numbers
-and the head draws four pixels too wide while the legs run six pixels proud of
-their frame. The `0.6`, `1.75` and `0.5` deltas inflate the *rendered* cube
-and never the net.
+**Branch B — the model does not exist.** Then the boxes are the design decision
+and everything else derives from them:
 
-**Whoever paints needs the model first — or the box list does.** A texture is
-not a free-standing drawing. It is a set of rectangles that only mean something
-once a model says which face reads which rectangle, so the two halves of the job
-are locked together. Both orders work; only one of them is free.
-
-- **The model already exists** — a vanilla mob, a reskin of one, or one the
-  modder has already written. Read it and paint into its net. A new cow variant
-  is a repaint, not a new layout; this is the cheap path, and it is why
-  `mc-art model` exists.
-- **No model yet.** Then the layout *is* the design decision, and the Java has
-  to honour it exactly. Author it with `mc-art boxes`, freeze the JSON, and
-  hand it to whoever writes the model: they build each box with those dimensions
-  and give its renderer that texture offset — `new ModelRenderer(this, u, v)`
-  then `addBox(x, y, z, w, h, d)`. The position arguments are theirs; they do not
-  touch the unwrap. What is pinned is `w,h,d` and `(u,v)`, because a box occupies
-  `2d + 2w` by `d + h` at that corner — which is the number
-  `mc-art boxes` just laid out for you.
-
-What you cannot do is paint freehand and hope. Every pixel of an entity atlas
-either belongs to a face of a box or to nothing — that is exactly what `uv`
-draws — and a pixel outside every box renders nowhere. So art may come first,
-but **the box list has to be frozen first**; it is the interface between the two
-halves of the job, cheap to write down and expensive to discover later.
-
-`boxes.json` is the object, not a template — one entry per physical part:
-
-```json
-{ "boxes": [ { "id": "shell", "part_id": "shell", "size": [16, 16, 16] } ] }
+```bash
+cat > work/model.json <<'JSON'
+{ "name": "blood_slime", "tex": [64, 32], "parts": [
+    { "name": "gel",  "pivot": [0,0,0], "rot": {}, "boxes": [
+        { "at": [-4,16,-4], "w": 8, "h": 8, "d": 8 } ] },
+    { "name": "core", "pivot": [0,0,0], "rot": {}, "boxes": [
+        { "at": [-3,17,-3], "w": 6, "h": 6, "d": 6 } ] } ] }
+JSON
+$M entity --spec work/model.json --out work    # assigns u/v, writes work/layout.json
+# paint a 64x32 atlas following work/layout.json, then:
+$M entity --spec work/model.json --out work --atlas work/atlas.png
+$M ingame --model work/model.json --texture work/atlas.png --out work/view.png
 ```
 
-A 16-cube unwraps to the canonical **64x32**, which is exactly what a slime
-needs; a cow or a biped gets its offsets from the shipped layouts instead. The
-shelf packer never overlaps two boxes, and the canvas grows to fit.
+`at` is `addBox`'s offset, `pivot` is `setRotationPoint`, `inflate` is the delta,
+and `rot` is in **degrees** — model space is y down, z backward, one unit is 1/16
+block. Leave `u`/`v` out and the packer assigns them; state them and they are kept
+verbatim, which is exactly what Branch A relies on, and why the two branches meet
+at the same `mc-art ingame` call.
 
-`uv` writes three things, and the first is the one that matters when you are
-authoring by hand:
+**Both branches end by looking.** That is the only step that catches a part buried
+inside another part, a layer that shows through, or a torso standing on end. See
+"Before you hand it over", above.
 
-- **`<name>_uvmap.png`** — the atlas at 8x with every region boxed, named and
-  given its bbox. Without it an entity atlas is mostly empty canvas and you are
-  guessing which cells belong to which part.
-- **`<name>_front.png`** — orthographic front view.
-- **`<name>_layers.png`** — the faces separated, so overlaps are visible.
+Three traps that are specific to this work:
 
-The two previews are **schematics**: they place each cube's front face using
-the layout's own `preview_instances`, with its side and top beside and above it.
-Two shipped layouts carried coordinates sized for the wrong face — an 8x8 cow
-head drawn 10x8, a 12x18 body drawn 20x14 — so the parts did not join, which is
-exactly what a reader noticed before any measurement did. The renderers now
-draw every face at its own pixel size (the metadata says *where*, never *how
-big*), and a test asserts the shipped metadata agrees. If a preview still looks
-disconnected, the metadata is what to check, not the atlas.
-
-`<name>_uvmap.png` has no such dependency: it only draws the boxes the layout
-declares, so it is the one to trust when they disagree.
-
-Two traps specific to entity work:
-
-- **`pixel_map` is opaque.** A translucent shell (a slime) cannot be expressed
-  through it. Set alpha explicitly and give the renderer an alpha authority:
-  a reference raster that already carries the transparency you want.
-- **A preview is not the game.** The isometric projector flattens a 16x16 top
-  face into a 32x16 rhombus, so one texel becomes a 2:1 parallelogram. Geometry
-  is correct; it just is not what you will see in the world. Use the previews to
-  check face ownership and shape, not final appearance.
-- **Painted outside every box is the signal; painted-but-unsampled is not.**
-  Vanilla leaves dead pixels: `sheep_fur.png` paints a full 12-tall leg where
-  `ModelSheep2` reads only the top six rows, and both sheep atlases carry 12
-  stray pixels beside the body. Check the direction that matters — *is a painted
-  pixel claimed by no box?* — because that is a part you have not modelled. A box
-  sampling transparent texels is usually a face the player can never see, which is
-  why the artists left it blank.
+- **A wool overlay is not the skin model inflated.** `ModelSheep1` (skin,
+  `sheep.png`) has a `6x6x8` head and `4x12x4` legs; `ModelSheep2` (wool,
+  `sheep_fur.png`) has a `6x6x6` head and `4x6x4` legs. Same texture offsets,
+  different nets: `28x14` against `24x12` for the head, `16x16` against `16x10`
+  for the legs. Lay the fur out on the skin's numbers and the head draws four
+  pixels too wide while the legs run six pixels proud of their frame.
+- **Vanilla leaves dead pixels, and that is not your bug.** `sheep_fur.png` paints
+  a full 12-tall leg where `ModelSheep2` reads only the top six rows, and both
+  sheep atlases carry 12 stray pixels beside the body. So the audit reports both
+  directions: **stray** (painted, sampled by nothing) is the one that means a part
+  is missing or misplaced; **empty** (a rectangle nobody painted) is usually a face
+  the player can never see, which is why the artists left it blank.
+- **A hand-typed spec fails silently.** The one written while building this lost
+  two of a sheep's four legs and still rendered a plausible animal. Generate it
+  (`--emit-spec`) or derive it (`mc-art entity`), and read the part inventory
+  `ingame` prints before it draws.
 
 ## Art literacy: where the eye is allowed to go
 

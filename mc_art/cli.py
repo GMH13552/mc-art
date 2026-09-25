@@ -349,6 +349,57 @@ def _texture_size(source, relative: str):
     return Image.open(io.BytesIO(blob)).size
 
 
+def _entity(args: argparse.Namespace) -> int:
+    """Plan an entity: one description in, a layout and a render spec out."""
+    from .entity import audit, format_audit, plan, write_plan
+
+    payload = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+    try:
+        result = plan(payload, canvas_width=args.canvas_width)
+    except ValueError as error:
+        print("SPEC ERROR  %s" % error)
+        return 1
+    written = write_plan(result, args.out)
+    spec = result["spec"]
+    print("MODEL   %s  %dx%d" % (spec["name"], result["canvas"][0], result["canvas"][1]))
+    for part in spec["parts"]:
+        boxes = " ".join("uv(%d,%d) %dx%dx%d" % (box["u"], box["v"], box["w"], box["h"], box["d"])
+                         for box in part["boxes"])
+        print("  %-12s pivot=%-16s rot=%-14s %s" % (
+            part["name"], tuple(_trim_all(part["pivot"])), part["rot"] or "{}", boxes))
+    print("LAYOUT  -> %s" % written["layout"])
+    print("SPEC    -> %s" % written["model"])
+    if args.atlas:
+        from PIL import Image
+
+        report = audit(spec, Image.open(args.atlas))
+        print("ATLAS   %s" % format_audit(report))
+        for box in report["boxes"]:
+            if box["empty"]:
+                print("  EMPTY  %-14s %d of %d texels unpainted" % (box["id"], box["empty"], box["cells"]))
+        if report["stray_pixels"]:
+            print("  STRAY  first pixels: %s" % report["stray_pixels"][:12])
+        if report["stray"]:
+            print("VERDICT FAIL  %d opaque texel(s) land outside every box; the game never samples them"
+                  % report["stray"])
+            return 1
+        print("VERDICT PASS  every opaque texel lands inside a box")
+        return 0
+    print("NEXT    -> paint a %dx%d atlas, then:" % (result["canvas"][0], result["canvas"][1]))
+    print("           mc-art uv --layout %s --texture <atlas.png> --out <dir>" % written["layout"])
+    print("           mc-art entity --spec %s --out %s --atlas <atlas.png>" % (args.spec, args.out))
+    print("           mc-art ingame --model %s --texture <atlas.png> --out <view.png>" % written["model"])
+    return 0
+
+
+def _trim_all(values):
+    out = []
+    for value in values:
+        number = float(value)
+        out.append(int(number) if number == int(number) else number)
+    return out
+
+
 def _ingame(args: argparse.Namespace) -> int:
     """Render the game's own view of a model, so a delivery can be looked at."""
     from .ingame import (CONTROLS, VIEWS, Camera, TextureSource, fit_camera,
@@ -408,9 +459,18 @@ def _ingame(args: argparse.Namespace) -> int:
                   "nothing to sample; --emit-spec writes the path for you")
             return 1
         try:
+            from .entity import audit, format_audit, load_spec
             from .ingame import describe
 
             print("MODEL   %s" % describe(spec))
+            try:
+                report = audit(load_spec(spec), source.image(texture))
+                print("ATLAS   %s" % format_audit(report))
+                if report["stray"]:
+                    print("        %d opaque texel(s) land outside every box"
+                          % report["stray"])
+            except ValueError as error:
+                print("ATLAS   (not checked: %s)" % error)
             view = args.view[0] if args.view else "front34"
             camera = fit_camera(spec, VIEWS[view], viewport=viewport)
             print("ENTITY  %s" % render_entity(
@@ -435,7 +495,7 @@ def _point(text, default):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mc_art",
-        description="Deterministic Minecraft art engine. Scan, evidence, render, pack, measure, recover models from bytecode, render the game view — no model inside.",
+        description="Deterministic Minecraft art engine. Scan, evidence, render, pack, measure; recover models from bytecode, plan an entity, render the game view — no model inside.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -534,6 +594,16 @@ def build_parser() -> argparse.ArgumentParser:
     ingame.add_argument("--from", dest="frm", metavar="X,Y,Z", help="block camera position")
     ingame.add_argument("--at", metavar="X,Y,Z", help="block camera target")
     ingame.set_defaults(handler=_ingame)
+
+    entity = sub.add_parser(
+        "entity",
+        help="plan an entity from one model description: emit the layout to paint and the spec to render")
+    entity.add_argument("--spec", required=True, metavar="MODEL.json",
+                        help="parts with pivots and boxes; u/v optional, assigned by the packer when absent")
+    entity.add_argument("--out", required=True, help="directory for layout.json and model.json")
+    entity.add_argument("--atlas", metavar="PNG", help="also check a painted atlas against the boxes")
+    entity.add_argument("--canvas-width", type=int, help="packing width; defaults to 64 or the widest net")
+    entity.set_defaults(handler=_entity)
 
     return parser
 
