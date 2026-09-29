@@ -337,18 +337,31 @@ class ReferenceIndex:
         return destination
 
 
-def _directory_entries(source: IndexSource) -> list[tuple[str, str, dict[str, str], bytes]]:
+def _directory_entries(source: IndexSource) -> tuple[list[tuple[str, str, dict[str, str], bytes]], list[str]]:
+    """Rows for one directory source, plus the paths that vanished mid-walk.
+
+    A project's own pack is rewritten and pruned constantly, so a file listed
+    by ``rglob`` can already be gone by the time it is opened.  Skipping it
+    quietly would make a deleted sprite look like a sprite that was never
+    drawn; the caller gets the names instead.
+    """
     root = Path(source.path)
     assets_root = root / "assets" if (root / "assets").is_dir() else root
     rows: list[tuple[str, str, dict[str, str], bytes]] = []
+    vanished: list[str] = []
     for path in sorted(assets_root.rglob("*.png")):
         relative = path.relative_to(assets_root).as_posix()
         pieces = PurePosixPath(relative).parts
         if len(pieces) < 3 or pieces[1] != "textures":
             continue
         namespace, resource = pieces[0], PurePosixPath(*pieces[1:]).as_posix()
-        rows.append((namespace, resource, {"kind": "directory", "path": str(path.resolve())}, path.read_bytes()))
-    return rows
+        try:
+            data = path.read_bytes()
+        except OSError:
+            vanished.append(relative)
+            continue
+        rows.append((namespace, resource, {"kind": "directory", "path": str(path.resolve())}, data))
+    return rows, vanished
 
 
 def _jar_entries(source: IndexSource) -> list[tuple[str, str, dict[str, str], bytes]]:
@@ -399,9 +412,13 @@ def build_index(
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             pass
 
-    rows = _directory_entries(source_info) if source_info.kind in {"directory", "resource_pack"} else _jar_entries(source_info)
-    entries: list[IndexEntry] = []
     errors: list[str] = []
+    if source_info.kind in {"directory", "resource_pack"}:
+        rows, vanished = _directory_entries(source_info)
+        errors.extend("%s: vanished while scanning" % name for name in vanished)
+    else:
+        rows = _jar_entries(source_info)
+    entries: list[IndexEntry] = []
     for namespace, resource, locator, data in rows:
         try:
             with Image.open(BytesIO(data)) as loaded:

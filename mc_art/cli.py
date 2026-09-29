@@ -18,11 +18,61 @@ from .contracts import ReferenceAsset, ReferenceRole
 from .evidence import _appearance_reference_evidence, shape_authority
 from .group_index import GroupReferenceSource
 from .planfile import plan_from_file
+from .project_settings import SourcePlan, plan_sources
 from .reference_index import build_index
 
 
 def _default_cache() -> Path:
     return Path(__file__).resolve().parents[1] / "references" / ".cache" / "live"
+
+
+def add_project_arguments(parser: argparse.ArgumentParser) -> None:
+    """The flags that make a project's own strategy file mean something.
+
+    Kept in one place so every command that reads assets asks the same
+    question of the same file.
+    """
+    parser.add_argument("--project", metavar="DIR",
+                        help="a project directory with mc-art.settings.json; its strategy "
+                             "(reference root, mod toggles, includeGenerated) decides the stack")
+    parser.add_argument("--no-generated", action="store_true",
+                        help="override the file: leave the project's own textures out of the references")
+    parser.add_argument("--no-mods", action="store_true",
+                        help="override the file: keep only the vanilla baseline")
+    parser.add_argument("--verbose", action="store_true",
+                        help="list every mod jar and the namespaces it contributes")
+    parser.add_argument("--version", metavar="NAME",
+                        help="when the reference root is a game directory holding several "
+                             "versions, name the one to use")
+
+
+def _plan_for(args: argparse.Namespace) -> tuple[SourcePlan, list[str]]:
+    """Turn --project plus --source into a source plan, and say what it decided.
+
+    Nothing is inferred when --project is absent: without it the explicit
+    --source values are the whole truth, exactly as before this existed.
+    """
+    explicit = list(getattr(args, "source", None) or [])
+    project = getattr(args, "project", None)
+    no_generated = bool(getattr(args, "no_generated", False))
+    no_mods = bool(getattr(args, "no_mods", False))
+    if project is None:
+        # No strategy file is named, so the explicit sources are the whole
+        # truth -- identical to how this command behaved before it existed.
+        return SourcePlan(explicit=[Path(item).expanduser().resolve() for item in explicit]), []
+    plan = plan_sources(
+        project,
+        explicit,
+        include_generated=False if no_generated else None,
+        include_mods=False if no_mods else None,
+        version=getattr(args, "version", None),
+        verbose=bool(getattr(args, "verbose", False)),
+    )
+    lines = plan.describe()
+    if no_generated or no_mods:
+        lines.append("  override ->%s%s" % (
+            " --no-generated" if no_generated else "", " --no-mods" if no_mods else ""))
+    return plan, lines
 
 
 def _index_vanilla(args: argparse.Namespace) -> int:
@@ -47,7 +97,10 @@ def _list_groups(args: argparse.Namespace) -> int:
     The catalogue never decodes a texture, so this is a fast way to check that
     a block really is one name rather than its individual faces.
     """
-    catalogue = build_catalogue(args.source)
+    plan, plan_lines = _plan_for(args)
+    for line in plan_lines:
+        print(line)
+    catalogue = build_catalogue(plan.stack())
     try:
         if args.extract:
             written = catalogue.extract(args.extract, args.to or "outputs/_groups")
@@ -83,6 +136,71 @@ def _list_groups(args: argparse.Namespace) -> int:
         catalogue.close()
 
 
+def _style_anchors(
+    catalogue,
+    source: GroupReferenceSource,
+    group,
+    plan: SourcePlan,
+    limit: int = 8,
+) -> list[ReferenceAsset]:
+    """The project's own already-drawn textures, offered as style anchors.
+
+    A new block should look like the blocks this project drew before it, not
+    like vanilla.  These are a different kind of reference from the baseline:
+    they carry ``pixel_style`` and ``palette`` and never ``shape``, because the
+    silhouette has to come from the geometry authority, and they are read
+    straight off disk on every run -- editing or deleting one changes exactly
+    this list, and leaves the game baseline untouched.
+    """
+    generated = {path.resolve() for path in plan.generated}
+    if not generated:
+        return []
+    chosen = []
+    budget = limit
+    for candidate in catalogue.select(category=getattr(group, "category", None)):
+        if candidate.asset_id == group.asset_id:
+            continue
+        owned = [texture for texture in candidate.textures
+                 if (root := catalogue.root_for(texture.resource_path)) is not None
+                 and root.path.resolve() in generated]
+        if not owned:
+            continue
+        # A group can carry several faces (blood_bone_block has two, flesh_grass
+        # three), so the budget is spent on textures -- capping groups let 8
+        # groups arrive as 11 images.
+        keep = min(len(owned), budget)
+        if keep == 0:
+            break
+        chosen.append((candidate, keep))
+        budget -= keep
+    out: list[ReferenceAsset] = []
+    for candidate, keep in chosen:
+        try:
+            entry = source.entry_for(candidate.asset_id)
+            made = source.planning_assets(
+                entry,
+                [ReferenceRole.PIXEL_STYLE, ReferenceRole.PALETTE],
+                display_name=candidate.name,
+                generated_roots=generated,
+            )
+        except (KeyError, FileNotFoundError, ValueError):
+            # Deleted between the catalogue scan and this read: dropping it is
+            # what "keeps up with a project being edited" means.
+            continue
+        for asset in made[:keep]:
+            out.append(ReferenceAsset(
+                path=asset.path,
+                name=asset.name,
+                roles=list(asset.roles),
+                notes=list(asset.notes) + [
+                    "origin=generated",
+                    "style_anchor=%s; already drawn in this project, match its palette and pixel style" % candidate.name,
+                ],
+                features=asset.features,
+            ))
+    return out
+
+
 def _evidence(args: argparse.Namespace) -> int:
     """Everything a plan author needs about one asset, with no model call.
 
@@ -90,7 +208,16 @@ def _evidence(args: argparse.Namespace) -> int:
     request, and the literal pixel text of every small raster -- so the caller
     can write the descriptor, geometry and appearance itself.
     """
-    catalogue = build_catalogue(args.source)
+    plan, plan_lines = _plan_for(args)
+    for line in plan_lines:
+        print(line)
+    if not plan.stack():
+        print("ERROR: nothing to read assets from -- no usable --source, "
+              "reference.directory resolved to no asset root, and the project's own "
+              "pack is switched off. The lines above say which of those it was.",
+              file=sys.stderr)
+        return 2
+    catalogue = build_catalogue(plan.stack())
     try:
         group = next((item for item in catalogue.select() if item.name == args.name), None)
         if group is None:
@@ -108,6 +235,7 @@ def _evidence(args: argparse.Namespace) -> int:
             display_name=args.name,
             preferred_member=args.member,
             max_frames=args.max_frames,
+            generated_roots={path.resolve() for path in plan.generated},
         )
         # One frame answers this request; its siblings are context. Printing
         # every frame as 'shape' is what let a standby bow copy the half-drawn
@@ -129,6 +257,11 @@ def _evidence(args: argparse.Namespace) -> int:
                     path=asset.path, name=asset.name, roles=roles, notes=notes, features=asset.features,
                 ))
             assets = marked
+        anchors = _style_anchors(catalogue, source, group, plan)
+        if anchors:
+            # Appended after the shape authority was chosen, so a style anchor
+            # can never be mistaken for the silhouette this request must copy.
+            assets = assets + anchors
         if args.json:
             print(json.dumps({
                 "asset_id": group.asset_id,
@@ -694,8 +827,9 @@ def build_parser() -> argparse.ArgumentParser:
     index.set_defaults(handler=_index_vanilla)
 
     listing = sub.add_parser("list-groups", help="list logical asset names (one name = all of its textures)")
-    listing.add_argument("--source", action="append", required=True, metavar="PATH",
+    listing.add_argument("--source", action="append", metavar="PATH",
                          help="vanilla JAR, mod JAR, resource pack, or a directory with assets/; repeat to stack (later wins)")
+    add_project_arguments(listing)
     listing.add_argument("--category", choices=list(CATEGORIES))
     listing.add_argument("--namespace")
     listing.add_argument("--filter")
@@ -707,7 +841,8 @@ def build_parser() -> argparse.ArgumentParser:
     listing.set_defaults(handler=_list_groups)
 
     ev = sub.add_parser("evidence", help="print the reference evidence a plan author needs, with no model call")
-    ev.add_argument("--source", action="append", required=True, metavar="PATH")
+    ev.add_argument("--source", action="append", metavar="PATH")
+    add_project_arguments(ev)
     ev.add_argument("--name", required=True, help="logical asset name, e.g. bow, clock, oak_log")
     ev.add_argument("--member", help="the family member this request is about, e.g. bow_standby")
     ev.add_argument("--cache")

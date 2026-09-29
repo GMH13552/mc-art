@@ -214,6 +214,126 @@ Mind the axes, because that is where the fourth bug lived: model space is
 game's world (x east, y up, z south) exactly as `RendererLivingEntity` does.
 A mob at yaw 0 faces south, so its front is the +z side.
 
+## Blocks: orientation and animation
+
+Two parts of a block's data are easy to miss, because a static element list does
+not show either of them.
+
+### Orientation is per-block data, not a table you keep
+
+The properties a block has — `axis`, `facing`, `half`, `shape`, `conditional`,
+`rotation` — come from **its own blockstate**. Measured over the whole vanilla
+set, `facing` appears in 1338 variant keys (1.12.2) and 3335 (1.18.2); `half`
+860 / 2374; `shape` 606 / 1966. So "does this block have an orientation" is a
+question you answer by reading the file, never a list you maintain.
+
+Three of the rules are **exact**, and a viewer that knows which face was clicked
+and where on it can derive them with nothing from the user:
+
+| property | rule | checked against |
+|---|---|---|
+| `axis` | the axis of the face you clicked | `BlockLog` / `RotatedPillarBlock` is `direction.getAxis()`; `oak_log` declares `axis=z` as `x:90` and `axis=x` as `x:90, y:90` in **both** versions |
+| `half` | bottom face → `top`, top face → `bottom`; on a side, `hitY > 0.5` → `top` | vanilla's own `hitY <= 0.5D` test |
+| `rotation` | the player's yaw, `floor(yaw * 16 / 360 + 0.5) & 15` | signs, banners, skulls — and it has **no clicked-face equivalent**, so a viewer with no player in the world cannot derive it at all |
+
+And one is **not** derivable. This is the trap:
+
+> **`facing` is computed in per-block Java, and the two families differ by 180
+> degrees.** A furnace ends up facing the player
+> (`getHorizontalFacing().getOpposite()`); a staircase ends up facing the way the
+> player looks (`getHorizontalFacing()`). Nothing in the blockstate, the model, or
+> any file on disk says which family a block belongs to — and it has changed
+> between versions for individual blocks.
+
+So do not hard-code a list of which block is which; you will be wrong next
+version. Take the majority convention (chest, dispenser, dropper, furnace: toward
+the player) as the derived default, make the result **visible in the preview**,
+and put the other one **one click away**.
+
+**A resource pack cannot introduce a property.** Blockstate variants map
+*property combinations* to models; the property itself is declared by the block's
+Java class. A pack-only asset with one unrotated variant — `eyeball_log` is
+exactly that — has no `axis` to set, which is why it cannot have orientation, and
+why `build_pack.py` prints *"blockstate axis variants and worldgen are mod work"*.
+Writing `axis` keys into the blockstate before the mod declares the property is
+inert at best.
+
+**`uvlock` is set far more often in 1.18 — and what it does is an open question
+here.** 610 variant entries set it in 1.12.2, 1888 in 1.18.2, and stairs set it in
+*both* versions, so it is not ignorable. But:
+
+- What is **measured**: how often it appears, and that a renderer which only
+  rotates the quad corners is not implementing it at all.
+- What is **not** settled: which way it turns the UV. "The texture locks to the
+  model" and "the texture stays put while the model turns" both fit the numbers —
+  and the blockstate data cannot decide it, because `uvlock` is a *baking*
+  instruction, not a value you can read back. The count of 90-degree steps a
+  rotate-model-only renderer is missing is likewise unverified.
+
+Settle it by **rendering a vanilla case with and without the UV rotation and
+looking at both** — the same standard as everywhere else in this skill. It cannot
+be settled before variant rotation exists, because without rotation there is
+nothing for `uvlock` to act on.
+
+### The 1.12 / 1.18 differences, measured
+
+The **format is the same**: `variants` keyed by `property=value`, `x` / `y`
+rotations, `uvlock`, and `multipart`. Over the whole vanilla blockstate set:
+
+| | 1.12.2 | 1.18.2 |
+|---|---|---|
+| blockstate files | 407 | 900 |
+| uses `variants` | 376 | 840 |
+| uses `multipart` | 31 (8%) | 60 (7%) |
+| has an `""` empty key | **0** | **493** |
+| variant entries with `uvlock: true` | 610 | 1888 |
+| `.png.mcmeta` (animated) | 26 | 64 |
+
+- **The `""` empty key is the flattening.** From 1.13 every single-state block
+  uses it; 1.12.2 never does. A resolver has to read both.
+- **`multipart` is a steady 7–8% in both**, so it is not a version problem: a
+  resolver that only reads `variants` loses the same share either way (vanilla
+  `fire`, fences, stained-glass panes).
+- **One encoding change worth knowing:** 1.18.2 points `axis=x` at a *separate*
+  model (`oak_log_horizontal`), where 1.12.2 reuses `oak_log` with `x:90, y:90`.
+  The derivation is identical; only the data moved.
+
+### Animated block textures (`.mcmeta`)
+
+The format has not changed since 1.5 — `sea_lantern.png.mcmeta` is
+**byte-identical** in 1.12.2 and 1.18.2. Only how common it is changed: 26
+animated textures against 64.
+
+An animated texture is a **vertical strip**: frame 0 on top, each next frame
+below it. `lava_still` is 16x320, `water_still` 16x512.
+
+```jsonc
+{ "animation": { "frametime": 5 } }        // 5 ticks per frame = 250 ms
+{ "animation": { "frametime": 3,
+                 "frames": [{"index": 0, "time": 5}, 2, 1, {"index": 2}] } }
+```
+
+Three things that are easy to get wrong:
+
+1. **`frametime` is in ticks (50 ms), not milliseconds.** Read as ms, a 5-tick
+   sea lantern plays twelve times too fast.
+2. **`frames` is a list, not a count.** It may reorder and repeat entries, and its
+   length need not equal the number of rows: `lava_still` declares 38 playback
+   steps over a 20-row strip. Keep the order; a bare count throws it away.
+3. **A strip is not a sprite, and the two consumers want opposite things.**
+   - The **3D view** wants the whole strip *plus* the description, and samples one
+     frame by offsetting `v`: `ty = row * width + v * width`.
+   - An **icon** is a CSS background or a single `<img>`: hand it a strip and it
+     arrives squashed into one square. It must be cropped to frame 0.
+
+   One extractor, two answers — decide which consumer you are serving.
+
+Two mechanical traps. An animated strip is **tall** (16x512), so whatever scratch
+canvas it is decoded onto has to grow to fit — otherwise the animation plays a few
+frames and then goes transparent **with no error at all**. And the current frame
+number has to be part of the "has the picture changed, redraw" guard, or the timer
+runs and the image never moves.
+
 ## Traps that bit a real asset
 
 From a live eyeball-tree build (a log, a stripped log, planks, leaves, a
@@ -254,6 +374,11 @@ It writes the pack, a `FACE_MAP.txt` saying which texture lands on which face,
 and a preview that really separates them. A `cube_column` whose `end` equals
 its `side` is reported as a warning, because that is exactly what one plan per
 texture produces by accident.
+
+A log needs a third thing, and it is **not** something this pipeline can give it:
+the `axis` variants. `cube_column` gives the geometry an end and a side, but a
+block lying on its side is a different *blockstate*, and the property behind it
+is declared in Java. See "Blocks: orientation and animation".
 
 **4. The single-plan isometric preview is always `cube_all`.** It does not know
 a block has faces. Do not diagnose a face problem from it — read
@@ -352,69 +477,6 @@ Mind the axes, because that is where the fourth bug lived: model space is
 **y down, z backward**, one unit is 1/16 block, and the renderer converts to the
 game's world (x east, y up, z south) exactly as `RendererLivingEntity` does.
 A mob at yaw 0 faces south, so its front is the +z side.
-
-## Traps that bit a real asset
-
-From a live eyeball-tree build (a log, a stripped log, planks, leaves, a
-sapling). Each one cost a round trip; none of them is object-specific.
-
-**1. `pattern` sampling copies saturated source pixels verbatim.** On a whole
-block face it pulled 50 of 256 pixels back as the source's own olive-browns,
-which read as dirt on a red tree. `pattern` is for keeping *grain*, and it
-keeps roughly 40% of the source colour to do it. When the target material is
-not the source material, either use `value` (brightness only) or write the
-value bands straight into the plan's `pixel_map` and keep the reference only
-as evidence. Recorded fix: the bands went into `pixel_map`, the reference
-stayed attached so `texture_audit.json` could still measure that the source's
-value rhythm survived.
-
-**2. A repeated pale accent along one line reads as a band.** Several
-`blood_pale` pixels adjacent on a 1px trickle turned it salmon pink. Along any
-one run of accent pixels, allow a single palest value; let the rest take the
-mid tone.
-
-**3. One plan is one texture. A block is often two.** A log needs an end-grain
-file *and* a side file. Building it one plan at a time can only produce
-`cube_all`, which is how a log ended up with its side texture on all six
-faces. Declare the faces instead:
-
-```json
-{ "namespace": "eyeballtree",
-  "textures": { "log": "out/log/sprite.png", "log_top": "out/log_top/sprite.png" },
-  "blocks": [ { "name": "eyeball_log", "model": "cube_column",
-                "faces": { "end": "log_top", "side": "log" }, "item": true } ] }
-```
-
-```bash
-M pack --manifest pack.json --out pack/
-```
-
-It writes the pack, a `FACE_MAP.txt` saying which texture lands on which face,
-and a preview that really separates them. A `cube_column` whose `end` equals
-its `side` is reported as a warning, because that is exactly what one plan per
-texture produces by accident.
-
-**4. The single-plan isometric preview is always `cube_all`.** It does not know
-a block has faces. Do not diagnose a face problem from it — read
-`FACE_MAP.txt` or the model JSON. A user once reported "your stripped log has
-the top face on all six sides"; the pack was correct and the preview was the
-liar.
-
-**5. Sibling assets share a cut face.** A stripped log's top is the *same cut*
-as the barked log's top with the outer ring planed off — not a different
-source tile. Measure it: the live pair came out 77% identical with every
-difference in the outermost ring and zero inside.
-
-**6. Check the family, not just the frames.** `measure` covers frame-to-frame
-agreement. Also confirm, per asset:
-
-- **palette adherence** — no pixel outside the family palette (count them; zero
-  is the target, and a stray source colour shows up here);
-- **material honesty** — no leaf pigment in wood, no bark in leaves, the
-  sapling's trunk drawn from the log's bark ramp;
-- **an accent budget** — decide how many pixels may carry the signature colour
-  (blood, glow) and compare every asset against it;
-- **hue spread** across the wood family — one narrow band, not several.
 
 ## Entities: one description, three artefacts, two branches
 

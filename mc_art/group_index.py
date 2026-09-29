@@ -181,6 +181,7 @@ class GroupReferenceSource:
         display_name: str | None = None,
         preferred_member: str | None = None,
         max_frames: int | None = None,
+        generated_roots: set[Path] | None = None,
     ) -> list[ReferenceAsset]:
         """Expand one logical name into a family of reference images.
 
@@ -193,6 +194,13 @@ class GroupReferenceSource:
         expansion keeps the frame this request is about plus an even spread of
         the remaining states, so the planners still see the range of the
         animation without paying for every degree of it.
+
+        ``generated_roots`` names the roots holding the project's **own**
+        output.  Every reference is stamped ``origin=generated`` or
+        ``origin=external`` from where its pixels actually came from, because
+        the two are not interchangeable: one is a thing this project already
+        decided, the other is the game's baseline, and a plan author that
+        cannot tell them apart cannot keep a style consistent.
         """
         group = entry.group
         base = (display_name or group.name).strip() or group.name
@@ -201,13 +209,25 @@ class GroupReferenceSource:
         if max_frames is not None and total > max_frames >= 1:
             indexed = _bounded_frames(indexed, preferred_member, max_frames)
         assets: list[ReferenceAsset] = []
+        wanted: set[Path] = set()
+        for item in generated_roots or ():
+            try:
+                wanted.add(Path(item).expanduser().resolve())
+            except (OSError, ValueError):
+                continue
         for index, texture in indexed:
             blob, features, _hit = self._materialize_texture(texture.resource_path)
             if blob is None:
+                # Deleted or unreadable since the catalogue was built.  The
+                # project is being edited while this runs; dropping the one
+                # texture is the whole recovery.
                 continue
+            root = self.catalogue.root_for(texture.resource_path)
+            generated = bool(wanted) and root is not None and root.path.resolve() in wanted
             notes = [
                 "group=%s" % group.asset_id,
                 "member=%d/%d" % (index + 1, total),
+                "origin=generated" if generated else "origin=external",
             ]
             if total > 1:
                 notes.append("family_member=%s" % texture.name)

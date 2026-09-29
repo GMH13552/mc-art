@@ -107,11 +107,27 @@ class AssetRoot:
         return self._keys
 
     def read(self, resource_path: str) -> bytes | None:
+        """Bytes for one resource, or None when it cannot be read right now.
+
+        ``_keys`` is a snapshot taken when the root was opened, but the bytes
+        always come from disk.  For a project being actively edited that means
+        a texture can be deleted (or replaced by a directory) between the two,
+        and an unguarded read turns a missing sprite into a crashed run.  A
+        vanished key is dropped so repeated lookups stop paying for it.
+        """
         if resource_path not in self._keys:
             return None
         if self._bundle is not None:
-            return self._bundle.read(resource_path)
-        return (self.path / resource_path).read_bytes()
+            try:
+                return self._bundle.read(resource_path)
+            except (KeyError, OSError):
+                self._keys.discard(resource_path)
+                return None
+        try:
+            return (self.path / resource_path).read_bytes()
+        except OSError:
+            self._keys.discard(resource_path)
+            return None
 
     def close(self) -> None:
         if self._bundle is not None:
@@ -250,6 +266,15 @@ class GroupCatalogue:
     def read(self, resource_path: str) -> bytes | None:
         root = self.owner.get(resource_path)
         return root.read(resource_path) if root is not None else None
+
+    def root_for(self, resource_path: str) -> AssetRoot | None:
+        """Which root answered for this path.
+
+        Later sources win, so this is the provenance of the *pixels* rather
+        than of the name -- the only way to tell a texture the project drew
+        from one the game shipped.
+        """
+        return self.owner.get(resource_path)
 
     def extract(self, asset_id: str, destination: str | Path) -> list[Path]:
         """Write every texture of one group to a destination directory.
