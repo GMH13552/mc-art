@@ -238,9 +238,9 @@ def validate_geometry(spec: GeometrySpec, compiled: CompiledGeometry, form: Asse
             second_is_host = "host support" in second_role or second_role.strip() in {"support", "primary support"}
             first_is_overlay = bool((first_words & detail_roles) and not first_is_host)
             second_is_overlay = bool((second_words & detail_roles) and not second_is_host)
-            if not first_is_overlay and any(token in first_text for token in ("local motif", "embedded", "inlaid", "inlay", "eyeball", "gem", "emblem")) and not first_is_host:
+            if not first_is_overlay and any(token in first_text for token in ("local motif", "embedded", "inlaid", "inlay", "example", "gem", "emblem")) and not first_is_host:
                 first_is_overlay = True
-            if not second_is_overlay and any(token in second_text for token in ("local motif", "embedded", "inlaid", "inlay", "eyeball", "gem", "emblem")) and not second_is_host:
+            if not second_is_overlay and any(token in second_text for token in ("local motif", "embedded", "inlaid", "inlay", "example", "gem", "emblem")) and not second_is_host:
                 second_is_overlay = True
             is_detail = first_is_overlay or second_is_overlay
             if form in {AssetForm.ITEM, AssetForm.CROSS} and not is_detail and min(len(first), len(second)) >= 10 and overlap > 0.80:

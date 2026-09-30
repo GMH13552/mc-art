@@ -16,7 +16,7 @@ makes. Both end up in the same shape, and 'mc-art ingame' renders either.
 
 The audit is the part that earns its keep. A rectangle no opaque texel lands in,
 or an opaque texel that lands in no rectangle, is exactly the failure a
-self-consistent-looking atlas hides -- and the one an eyeball render cannot be
+self-consistent-looking atlas hides -- and the one an example render cannot be
 trusted to catch, because a mob painted into the wrong rectangles still renders
 as a mob.
 """

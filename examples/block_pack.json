@@ -1,56 +1,56 @@
 {
-  "namespace": "eyeballtree",
+  "namespace": "examplepack",
   "pack_format": 15,
-  "description": "eyeball tree",
+  "description": "example pack",
   "textures": {
-    "eyeball_log": "out/eyeball_log/sprite.png",
-    "eyeball_log_top": "out/eyeball_log_top/sprite.png",
-    "eyeball_stripped_log": "out/eyeball_stripped_log/sprite.png",
-    "eyeball_stripped_log_top": "out/eyeball_stripped_log_top/sprite.png",
-    "eyeball_planks": "out/eyeball_planks/sprite.png",
-    "eyeball_leaves": "out/eyeball_leaves/sprite.png",
-    "eyeball_sapling": "out/eyeball_sapling/sprite.png"
+    "example_log": "out/example_log/sprite.png",
+    "example_log_top": "out/example_log_top/sprite.png",
+    "example_stripped_log": "out/example_stripped_log/sprite.png",
+    "example_stripped_log_top": "out/example_stripped_log_top/sprite.png",
+    "example_planks": "out/example_planks/sprite.png",
+    "example_leaves": "out/example_leaves/sprite.png",
+    "example_sapling": "out/example_sapling/sprite.png"
   },
   "blocks": [
     {
-      "name": "eyeball_log",
+      "name": "example_log",
       "model": "cube_column",
       "faces": {
-        "end": "eyeball_log_top",
-        "side": "eyeball_log"
+        "end": "example_log_top",
+        "side": "example_log"
       },
       "item": true
     },
     {
-      "name": "eyeball_stripped_log",
+      "name": "example_stripped_log",
       "model": "cube_column",
       "faces": {
-        "end": "eyeball_stripped_log_top",
-        "side": "eyeball_stripped_log"
+        "end": "example_stripped_log_top",
+        "side": "example_stripped_log"
       },
       "item": true
     },
     {
-      "name": "eyeball_planks",
+      "name": "example_planks",
       "model": "cube_all",
       "faces": {
-        "all": "eyeball_planks"
+        "all": "example_planks"
       },
       "item": true
     },
     {
-      "name": "eyeball_leaves",
+      "name": "example_leaves",
       "model": "cube_all",
       "faces": {
-        "all": "eyeball_leaves"
+        "all": "example_leaves"
       },
       "item": true
     },
     {
-      "name": "eyeball_sapling",
+      "name": "example_sapling",
       "model": "cross",
       "faces": {
-        "cross": "eyeball_sapling"
+        "cross": "example_sapling"
       },
       "item": true
     }

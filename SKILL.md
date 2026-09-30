@@ -27,7 +27,7 @@ tests/              60 tests over the engine
 ## The loop
 
 ```bash
-M=/home/gmh/.dsh/skills/mc-art/bin/mc-art
+M=bin/mc-art
 JAR="<path to a vanilla jar, a mod jar, or a directory with assets/>"
 
 # 1. SCAN — what logical names exist (one name = all of its textures)
@@ -101,7 +101,7 @@ Never hand back a render you have not looked at. The numbers have been wrong in
 both directions; the sprite is the evidence.
 
 ```bash
-S=/home/gmh/.dsh/skills/mc-art/scripts
+S=scripts
 python3 "$S/magnify.py" '{"out":"/tmp/check.png","cols":4,"entries":[
   ["SRC","/tmp/refs/bow_standby.png"], ["MINE","outputs/mine/sprite.png"]]}'
 $M measure mine_a.png mine_b.png mine_c.png --baseline /tmp/refs/bow_standby.png
@@ -252,7 +252,7 @@ and put the other one **one click away**.
 
 **A resource pack cannot introduce a property.** Blockstate variants map
 *property combinations* to models; the property itself is declared by the block's
-Java class. A pack-only asset with one unrotated variant — `eyeball_log` is
+Java class. A pack-only asset with one unrotated variant — `example_log` is
 exactly that — has no `axis` to set, which is why it cannot have orientation, and
 why `build_pack.py` prints *"blockstate axis variants and worldgen are mod work"*.
 Writing `axis` keys into the blockstate before the mod declares the property is
@@ -336,7 +336,7 @@ runs and the image never moves.
 
 ## Traps that bit a real asset
 
-From a live eyeball-tree build (a log, a stripped log, planks, leaves, a
+From a live example-pack build (a log, a stripped log, planks, leaves, a
 sapling). Each one cost a round trip; none of them is object-specific.
 
 **1. `pattern` sampling copies saturated source pixels verbatim.** On a whole
@@ -360,9 +360,9 @@ file *and* a side file. Building it one plan at a time can only produce
 faces. Declare the faces instead:
 
 ```json
-{ "namespace": "eyeballtree",
+{ "namespace": "examplepack",
   "textures": { "log": "out/log/sprite.png", "log_top": "out/log_top/sprite.png" },
-  "blocks": [ { "name": "eyeball_log", "model": "cube_column",
+  "blocks": [ { "name": "example_log", "model": "cube_column",
                 "faces": { "end": "log_top", "side": "log" }, "item": true } ] }
 ```
 

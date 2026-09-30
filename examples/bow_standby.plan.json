@@ -238,7 +238,7 @@
   },
   "references": [
     {
-      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/84/84bf48b16dadceeaca93c9645acc5be1a40db8623b0ede1375644e1bd4993c36.png",
+      "path": "references/.cache/live/blobs/84/84bf48b16dadceeaca93c9645acc5be1a40db8623b0ede1375644e1bd4993c36.png",
       "name": "bow:bow_pulling_0",
       "roles": [
         "scale"
@@ -251,7 +251,7 @@
       ]
     },
     {
-      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/f7/f7e5e9ef23b6c9b39e4675fc4326df92b66d45bb0a64dc4852c1fd031ff2b0b4.png",
+      "path": "references/.cache/live/blobs/f7/f7e5e9ef23b6c9b39e4675fc4326df92b66d45bb0a64dc4852c1fd031ff2b0b4.png",
       "name": "bow:bow_pulling_1",
       "roles": [
         "scale"
@@ -264,7 +264,7 @@
       ]
     },
     {
-      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/77/778090baec36ae4eb2071b0eab425c18f0ded8316b23100842b7c818119d93ea.png",
+      "path": "references/.cache/live/blobs/77/778090baec36ae4eb2071b0eab425c18f0ded8316b23100842b7c818119d93ea.png",
       "name": "bow:bow_pulling_2",
       "roles": [
         "scale"
@@ -277,7 +277,7 @@
       ]
     },
     {
-      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/6f/6f62b5a5eac576af20f1ddd79e69df37b19a036691aa26b7523753f995e3dd8d.png",
+      "path": "references/.cache/live/blobs/6f/6f62b5a5eac576af20f1ddd79e69df37b19a036691aa26b7523753f995e3dd8d.png",
       "name": "bow:bow_standby",
       "roles": [
         "scale",
@@ -291,7 +291,7 @@
       ]
     },
     {
-      "path": "/home/gmh/.dsh/skills/mc-art/references/.cache/live/blobs/ec/ec0361a55151be9ceef9f2cd3cb1375effa79a2f3bfdd95247be25b4d6c448ec.png",
+      "path": "references/.cache/live/blobs/ec/ec0361a55151be9ceef9f2cd3cb1375effa79a2f3bfdd95247be25b4d6c448ec.png",
       "name": "string",
       "roles": [
         "material",

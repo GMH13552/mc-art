@@ -129,7 +129,7 @@ class ArtDirection:
 _OVERLAY_PART_WORDS = {
     "embedded", "inlaid", "inlay", "inserted", "attached", "mounted",
     "encased", "grafted", "motif", "emblem", "boss", "socket", "gem",
-    "eye", "eyeball", "detail", "accent", "ornament", "镶嵌", "嵌入",
+    "eye", "example", "detail", "accent", "ornament", "镶嵌", "嵌入",
 }
 
 

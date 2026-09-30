@@ -1,6 +1,6 @@
 """The pack manifest: several textures, one face-correct block.
 
-A live eyeball-tree run built a log from separate end-grain and side plans and
+A live example-pack run built a log from separate end-grain and side plans and
 got a pack whose isometric preview showed the side texture on all six faces.
 The pack was right; the single-texture path simply cannot express "end differs
 from side", so this is the test that it now can.
@@ -28,7 +28,7 @@ def _manifest(tmp_path: Path) -> dict:
     side = _solid(tmp_path / "src" / "log_side.png", (200, 30, 30, 255))
     plant = _solid(tmp_path / "src" / "sapling.png", (240, 240, 120, 255))
     return {
-        "namespace": "eyeballtree",
+        "namespace": "examplepack",
         "pack_format": 15,
         "textures": {
             "log_top": str(end),
@@ -36,9 +36,9 @@ def _manifest(tmp_path: Path) -> dict:
             "sapling": str(plant),
         },
         "blocks": [
-            {"name": "eyeball_log", "model": "cube_column",
+            {"name": "example_log", "model": "cube_column",
              "faces": {"end": "log_top", "side": "log_side"}, "item": True},
-            {"name": "eyeball_sapling", "model": "cross",
+            {"name": "example_sapling", "model": "cross",
              "faces": {"cross": "sapling"}, "item": True},
         ],
     }
@@ -48,12 +48,12 @@ def test_a_column_block_keeps_its_end_and_side_distinct(tmp_path: Path) -> None:
     result = build_pack(_manifest(tmp_path), tmp_path / "pack")
 
     model = json.loads(
-        (tmp_path / "pack" / "assets" / "eyeballtree" / "models" / "block" / "eyeball_log.json")
+        (tmp_path / "pack" / "assets" / "examplepack" / "models" / "block" / "example_log.json")
         .read_text(encoding="utf-8")
     )
     assert model["parent"] == "minecraft:block/cube_column"
-    assert model["textures"]["end"] == "eyeballtree:block/log_top"
-    assert model["textures"]["side"] == "eyeballtree:block/log_side"
+    assert model["textures"]["end"] == "examplepack:block/log_top"
+    assert model["textures"]["side"] == "examplepack:block/log_side"
     assert result["warnings"] == [], "distinct end and side must not warn"
 
 
@@ -69,19 +69,19 @@ def test_a_column_preview_shows_both_faces(tmp_path: Path) -> None:
 def test_a_cross_block_is_a_block_not_an_item(tmp_path: Path) -> None:
     """A live sapling shipped into textures/item, where the game never looks."""
     build_pack(_manifest(tmp_path), tmp_path / "pack")
-    root = tmp_path / "pack" / "assets" / "eyeballtree"
+    root = tmp_path / "pack" / "assets" / "examplepack"
     assert (root / "textures" / "block" / "sapling.png").exists()
     assert not (root / "textures" / "item" / "sapling.png").exists()
-    assert (root / "blockstates" / "eyeball_sapling.json").exists()
-    model = json.loads((root / "models" / "block" / "eyeball_sapling.json").read_text(encoding="utf-8"))
+    assert (root / "blockstates" / "example_sapling.json").exists()
+    model = json.loads((root / "models" / "block" / "example_sapling.json").read_text(encoding="utf-8"))
     assert model["parent"] == "minecraft:block/cross"
-    assert model["textures"]["cross"] == "eyeballtree:block/sapling"
+    assert model["textures"]["cross"] == "examplepack:block/sapling"
 
 
 def test_the_face_map_names_every_texture(tmp_path: Path) -> None:
     result = build_pack(_manifest(tmp_path), tmp_path / "pack")
     face_map = (Path(result["pack"]) / "FACE_MAP.txt").read_text(encoding="utf-8")
-    assert "eyeball_log" in face_map and "end=log_top" in face_map and "side=log_side" in face_map
+    assert "example_log" in face_map and "end=log_top" in face_map and "side=log_side" in face_map
     assert "cube_column" in face_map
 
 

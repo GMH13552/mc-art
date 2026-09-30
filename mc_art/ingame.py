@@ -682,7 +682,7 @@ def orientation_check():
     In a head-on front view, the model corner that lands top-left on screen must
     carry the texture rect's top-left uv. Get TexturedQuad's assignment wrong and
     every face quietly rotates 180 degrees and mirrors -- a cow still looks like
-    a cow, which is exactly why this has to be an assertion and not an eyeball.
+    a cow, which is exactly why this has to be an assertion and not an example.
     """
     model = glyph_model("unused.png")
     camera = Camera((0.0, FOOT_OFFSET, 4.0), (0.0, FOOT_OFFSET, 0.0), viewport=(200, 200))
