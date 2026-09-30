@@ -559,7 +559,7 @@ Three traps that are specific to this work:
 
 Learned the expensive way, over three rounds of "make the stone quieter".
 
-**1. Accent is a budget, granted by role.** A live flesh-biome set put
+**1. Accent is a budget, granted by role.** A live biome set put
 eye-catching pustules and bright blood lines on *ordinary stone*; the user's
 reaction was that mining a backpack of it would be exhausting. The rule that
 settled it:

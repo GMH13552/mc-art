@@ -165,7 +165,7 @@ def _style_anchors(
                  and root.path.resolve() in generated]
         if not owned:
             continue
-        # A group can carry several faces (blood_bone_block has two, flesh_grass
+        # A group can carry several faces (example_bone_block has two, example_grass
         # three), so the budget is spent on textures -- capping groups let 8
         # groups arrive as 11 images.
         keep = min(len(owned), budget)
