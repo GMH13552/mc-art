@@ -232,7 +232,7 @@ def inherit_anchor_paint(
     as four materials.
 
     Matching is by mask overlap, never by part name: a member calls the same
-    region bow_body, crystal_bow_body or crystal_bow_body_upper, and only the
+    region bow_body, example_bow_body or example_bow_body_upper, and only the
     pixels agree. Overlap is also the guard -- members of a plain set
     (helmet, chestplate) sit on different atlases, so nothing matches and each
     keeps its own paint.

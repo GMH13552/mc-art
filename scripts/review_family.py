@@ -10,7 +10,7 @@ guessing paths:
 
 The shape host is the reference whose family_member name matches the member
 (suffix match, either direction): the planner names a member after its whole
-set, so 'crystal_bow_standby' answers source frame 'bow_standby'.
+set, so 'example_bow_standby' answers source frame 'bow_standby'.
 """
 import json
 import sys

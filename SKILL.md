@@ -350,7 +350,7 @@ stayed attached so `texture_audit.json` could still measure that the source's
 value rhythm survived.
 
 **2. A repeated pale accent along one line reads as a band.** Several
-`blood_pale` pixels adjacent on a 1px trickle turned it salmon pink. Along any
+`example_pale` pixels adjacent on a 1px trickle turned it salmon pink. Along any
 one run of accent pixels, allow a single palest value; let the rest take the
 mid tone.
 
@@ -443,7 +443,7 @@ everything else derives from them.
 
 ```bash
 cat > work/model.json <<'JSON'
-{ "name": "blood_slime", "tex": [64, 32], "parts": [
+{ "name": "example_slime", "tex": [64, 32], "parts": [
     { "name": "gel",  "pivot": [0,0,0], "rot": {}, "boxes": [
         { "at": [-4,16,-4], "w": 8, "h": 8, "d": 8 } ] },
     { "name": "core", "pivot": [0,0,0], "rot": {}, "boxes": [
@@ -451,14 +451,14 @@ cat > work/model.json <<'JSON'
 JSON
 
 # layout.json to paint against, model.json to render, and the mod's Java
-$M entity --spec work/model.json --out work --java work/src --class-name ModelBloodSlime
+$M entity --spec work/model.json --out work --java work/src --class-name ModelExampleSlime
 
 # paint a 64x32 atlas following work/layout.json, then close both loops:
 $M entity --spec work/model.json --out work --atlas work/atlas.png    # PASS / FAIL
 $M ingame --model work/model.json --texture work/atlas.png --out work/view.png
 
 # and if anyone hand-edits the Java, read it back and diff:
-$M model --java work/src/ModelBloodSlime.java --emit-spec work/back.json
+$M model --java work/src/ModelExampleSlime.java --emit-spec work/back.json
 ```
 
 The generated class is not scaffolding to throw away. Its `addBox` calls *are*
@@ -514,7 +514,7 @@ and everything else derives from them:
 
 ```bash
 cat > work/model.json <<'JSON'
-{ "name": "blood_slime", "tex": [64, 32], "parts": [
+{ "name": "example_slime", "tex": [64, 32], "parts": [
     { "name": "gel",  "pivot": [0,0,0], "rot": {}, "boxes": [
         { "at": [-4,16,-4], "w": 8, "h": 8, "d": 8 } ] },
     { "name": "core", "pivot": [0,0,0], "rot": {}, "boxes": [
@@ -597,7 +597,7 @@ sprite is the evidence, and a preview that flatters it is worse than none.
 1. **Look at the source art before designing.** Text summaries lose everything
    that makes a sprite readable.
 2. **One family member is the shape authority.** `bow_standby` ↔
-   `bow:bow_standby`; `crystal_bow_pulling_1` suffix-matches `bow_pulling_1`.
+   `bow:bow_standby`; `example_bow_pulling_1` suffix-matches `bow_pulling_1`.
    `evidence` marks it and demotes the siblings to context. A standby bow once
    shipped the half-drawn frame's silhouette because all four arrived as
    `roles=shape` and the first one listed won.

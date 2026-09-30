@@ -29,7 +29,7 @@ def family_member_match(member: str, wanted: str) -> int:
     """How well a source family member name answers a request name; 0 = no.
 
     The planner names a family member after its whole set, so the request says
-    crystal_bow_standby where the source frame is bow_standby. Accept either
+    example_bow_standby where the source frame is bow_standby. Accept either
     direction and score by length, which is what separates bow_pulling_1 from
     pulling_1.
     """
