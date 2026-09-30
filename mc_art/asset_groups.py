@@ -1,7 +1,7 @@
 """Logical asset grouping: one name, all of its textures.
 
 A block is not a file. 'oak_log' is a blockstate that resolves through a model
-parent chain to two textures, and a large mod such as AoA3 ships 1403
+parent chain to two textures, and one large mod can ship well over a thousand
 blockstates for 3701 textures. A router that has to choose a reference cannot
 reason about 'log_oak_top'; it can reason about 'oak_log'.
 
@@ -77,7 +77,7 @@ class AssetRoot:
 
     The underlying ZipFile stays open for the lifetime of the root. That
     matters: re-opening a JAR re-parses its entire central directory (45 ms for
-    the vanilla 1.12.2 JAR, 93 ms for AoA3), which is the difference between a
+    the vanilla 1.12.2 JAR, tens of ms for a large mod), which is the difference between a
     one-second scan and a five-minute one.
     """
 

@@ -655,7 +655,7 @@ class JarSource:
 
         Found by shape rather than by name, because a mod jar may be readable
         (ModelCoratee) or obfuscated (bqp) and the texture path may never appear
-        as a literal at all -- AoA3 builds its paths in a registry, so asking
+        as a literal at all -- 一个大型模组 builds its paths in a registry, so asking
         which class draws a texture finds nothing, while asking which classes
         are models finds all of them. A model both calls addBox and constructs a
         renderer, so it carries both descriptors; a renderer carries only the

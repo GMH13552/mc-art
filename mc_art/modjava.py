@@ -23,7 +23,7 @@ _RENDERER = "net.minecraft.client.model.ModelRenderer"
 
 
 def class_name_from(path: Any) -> str:
-    """ModelBloodSlime.java -> ModelBloodSlime."""
+    """ModelExampleSlime.java -> ModelExampleSlime."""
     text = str(path).replace("\\", "/").split("/")[-1]
     return text[:-5] if text.endswith(".java") else text
 
