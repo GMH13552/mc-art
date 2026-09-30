@@ -943,7 +943,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _pin_utf8_stdio():
+    """把 stdout/stderr 钉成 UTF-8。
+
+    为什么要：Windows 上 Python 的 stdio 用**系统区域编码**（中文机器上是 GBK），
+    于是这里 print 出去的中文（资产名、命名空间、日志行）到别的程序眼里就是 `����ʯ`
+    —— 而 DSH 的 shell 与面板都按 UTF-8 解。`-X utf8` 会被环境里的 `PYTHONIOENCODING`
+    盖过，`reconfigure` 谁也盖不过，所以在这里钉死。旧 Python 没有 reconfigure，包在 try 里。
+    """
+    import sys as _sys
+    for stream in (_sys.stdout, _sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _pin_utf8_stdio()
     args = build_parser().parse_args(argv)
     try:
         return int(args.handler(args))
