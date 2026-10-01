@@ -72,7 +72,7 @@ stretched planks.
 |---|---|
 | `SKILL.md` | the procedure the model follows, including which decisions are the model's and which are the engine's |
 | `bin/mc-art` | the whole tool surface: scan / evidence / render / pack / measure / audit / why-reference / block / model / entity / ingame |
-| `mc_art/` | the engine — 22 modules, Pillow + stdlib, never touches a network |
+| `mc_art/` | the engine — 34 modules, Pillow + stdlib, never touches a network |
 | `examples/` | working plans, including a rendered family and a block entity with their own build and fault scripts |
 | `layouts/` | worked examples. `mc-art model --emit-spec` reads any mob from any jar, so these are references to compare against rather than tables to reach for |
 | `scripts/` | magnify / review_family / continuity |

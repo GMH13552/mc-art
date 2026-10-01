@@ -294,6 +294,66 @@ def unaudited_accent_report(
     return report, reasons
 
 
+def edge_margin_report(
+    image: "Image.Image | str | Path",
+    points: set[tuple[int, int]] | None = None,
+    *,
+    accent_colors: Sequence[object] = (),
+    base_colors: Sequence[object] = (),
+    palette: dict[str, str] | None = None,
+    tolerance: int = 48,
+) -> dict[str, Any]:
+    """How close does the pattern come to the canvas edge?
+
+    A block texture is TILED: a speck on row 0 shows up as half a speck where the
+    next block starts, which reads as a seam. Measured over the vanilla ores, six
+    of the eight keep at least one pixel of margin and only emerald touches the
+    border -- it is what the game's own art does, not fastidiousness.
+
+    The engine had no such check at all, while the skill's "who decides what" table
+    listed *tiling seams* among the things pixel statistics cover. A document that
+    promises a check the engine does not perform is the same class of defect as a
+    gate that measures the wrong thing.
+
+    Counts only the PATTERN pixels (the accent), not the base: a full-bleed base is
+    what a block texture is, and reporting it would make every block look broken.
+    """
+    loaded = _load(image)
+    pixels = _opaque_map(loaded)
+    width, height = loaded.size
+    if points is None:
+        points, _mode = accent_points(
+            loaded,
+            accent_colors=accent_colors,
+            base_colors=base_colors,
+            palette=palette,
+            accent_tolerance=tolerance,
+        )
+    points = {point for point in points if point in pixels}
+    if not points:
+        return {
+            "applicable": False,
+            "minimum_margin": None,
+            "border_pixels": 0,
+            "note": "no pattern pixels: nothing can sit on a seam",
+        }
+    border = [
+        (x, y) for x, y in points
+        if x in (0, width - 1) or y in (0, height - 1)
+    ]
+    margin = min(
+        min(x, y, width - 1 - x, height - 1 - y) for x, y in points
+    ) if points else 0
+    return {
+        "applicable": True,
+        "minimum_margin": margin,
+        "border_pixels": len(border),
+        "border_at": sorted(border)[:10],
+        "canvas": [width, height],
+        "ok": not border,
+    }
+
+
 def band_report(
     image: "Image.Image | str | Path",
     *,
@@ -665,8 +725,42 @@ def _ramp_monotone_share(
     return round(falling, 4)
 
 
-# Vanilla iron_ore: accent luma 142.6 against a base of 130.3.
-VANILLA_ACCENT_GAP = 12.24
+# THE ITEM BAND. This is an accent sitting ON an item -- an amber rune, a gem
+# highlight -- and it is calibrated on ONE such accent: iron_ore's own mask,
+# measured as the mean of the whole deposit (luma 142.6 against a base of 130.3).
+#
+# It is NOT the standard for ore specks, and treating it as one is a mistake that
+# cost a real project seven or eight rounds of tuning. Measured per deposit over
+# all eight vanilla ores, the gap runs from -75.7 (redstone) to +106.6 (gold) --
+# none of them inside this band, and they fall on both sides of it. Averaging a
+# whole deposit is what produced the 12.24 in the first place: it flattens a
+# high-contrast ore into a middling number and then measures everybody else by it.
+#
+# So: the default band stays where it is, for ITEMS, and an ore declares its own
+# band from the ore family it actually measured. `mc-art gap-from-refs` measures
+# one. See ITEM_ACCENT_GAP_* and ORE_ACCENT_GAP_RANGE below.
+ITEM_ACCENT_GAP = 12.24
+ITEM_ACCENT_GAP_MIN = 6.0
+ITEM_ACCENT_GAP_MAX = 24.0
+
+# What eight vanilla ores actually measure, per deposit, against their own stone.
+# Published so the number in an error message is one a caller can check, and so
+# nobody has to re-derive it from scratch.
+ORE_ACCENT_GAP_RANGE = (-75.7, 106.6)
+ORE_ACCENT_GAP_EXAMPLES = {
+    "coal": -68.2,
+    "redstone": -75.7,
+    "lapis": -61.3,
+    "copper": 33.8,
+    "iron": 57.7,
+    "emerald": 72.9,
+    "diamond": 73.0,
+    "gold": 106.6,
+}
+
+#: Asset categories whose accent is a deposit rather than a decoration. Their gap
+#: band must come from measurement, because the item band does not describe them.
+DEPOSIT_CATEGORIES = frozenset({"ore_deposit"})
 
 
 def _bar_shape(cluster: set[tuple[int, int]], *, fill_max: float, min_aspect: float) -> dict[str, Any]:
@@ -913,6 +1007,9 @@ def accent_audit(
     accent_base_sign_positive: bool = True,
     threshold_waiver: str = "",
     points: set[tuple[int, int]] | None = None,
+    asset_category: str = "",
+    gap_band_declared: bool = False,
+    tiling_min_margin: int | None = None,
 ) -> dict[str, Any]:
     """Count the accent pixels a sprite spent, and check every declared budget.
 
@@ -1092,7 +1189,30 @@ def accent_audit(
         len(points) >= 2 and bool(base_points) and bool(base_colors)
     )
     gap_reasons: list[str] = []
-    if gap_applicable and accent_base_gap_max is not None:
+    # An ore deposit is not an item decoration, and the item band does not describe
+    # it. Rather than measuring an ore against a band that was never about ores,
+    # say so and name the way out -- which is also the way that is cheaper than
+    # tuning: declare the band you measured.
+    ore_like = bool(asset_category) and asset_category in DEPOSIT_CATEGORIES
+    if ore_like and not gap_band_declared:
+        gap_reasons.append(
+            "an ore deposit's accent gap cannot be judged by the engine's default band. The "
+            "default (%.1f..%.1f) is calibrated on an ITEM's accent -- one deposit's mean, "
+            "iron_ore at %+.1f. Ore specks are not like that: eight vanilla ores measured per "
+            "deposit run %+.1f (redstone) to %+.1f (gold), and NONE of them falls inside the "
+            "default band. Do not tune the sprite against it. Measure your own references -- "
+            "`mc-art gap-from-refs <the ore textures>` prints the range, and reports the "
+            "per-deposit and per-pixel figures separately -- then declare "
+            "accent_base_gap_min / accent_base_gap_max from it, or explain in threshold_waiver"
+            % (
+                ITEM_ACCENT_GAP_MIN,
+                ITEM_ACCENT_GAP_MAX,
+                ITEM_ACCENT_GAP,
+                ORE_ACCENT_GAP_RANGE[0],
+                ORE_ACCENT_GAP_RANGE[1],
+            )
+        )
+    elif gap_applicable and accent_base_gap_max is not None:
         too_loud = signed > accent_base_gap_max
         too_faint = accent_base_gap_min is not None and signed < accent_base_gap_min
         reversed_sign = accent_base_sign_positive and signed <= 0.0
@@ -1100,7 +1220,8 @@ def accent_audit(
             if reversed_sign:
                 diagnosis = (
                     "and it is on the WRONG SIDE -- the accent is %.1f luma DARKER than its "
-                    "base, where vanilla's ore specks are %.1f luma BRIGHTER" % (gap, VANILLA_ACCENT_GAP)
+                    "base, while this plan's declared band is %+.1f..%+.1f"
+                    % (gap, accent_base_gap_min or 0.0, accent_base_gap_max)
                 )
             elif too_loud:
                 diagnosis = "too loud: pasted on rather than set in"
@@ -1108,12 +1229,11 @@ def accent_audit(
                 diagnosis = "too faint: smeared into the base until it is barely an accent"
             gap_reasons.append(
                 "accent is not embedded: the accent sits %+.1f luma from the material it is set "
-                "into, %s (vanilla iron_ore sits %+.1f; the band is %.1f..%.1f, and the accent "
-                "boundary may step by at most %.1f, measured %.1f)"
+                "into, %s (band %+.1f..%+.1f, and the accent boundary may step by at most %.1f, "
+                "measured %.1f)"
                 % (
                     signed,
                     diagnosis,
-                    VANILLA_ACCENT_GAP,
                     accent_base_gap_min if accent_base_gap_min is not None else 0.0,
                     accent_base_gap_max,
                     accent_base_edge_mean_max or 0.0,
@@ -1123,9 +1243,11 @@ def accent_audit(
     gap_ok = not gap_reasons
     report["base_gap"] = {
         "applicable": gap_applicable,
+        "asset_category": asset_category or "",
+        "band_is_item_default": not gap_band_declared,
         "accent_base_gap_mean": report["accent_base_gap_mean"],
         "accent_base_signed_gap": signed,
-        "vanilla_gap": VANILLA_ACCENT_GAP,
+        "vanilla_gap": ITEM_ACCENT_GAP,
         "minimum_gap": accent_base_gap_min,
         "maximum_gap": accent_base_gap_max,
         "edge_delta_mean": report["edge_delta_mean"],
@@ -1146,6 +1268,17 @@ def accent_audit(
         report["base_gap"]["waived"] = threshold_waiver
     report["base_gap_ok"] = gap_ok
     report["points"] = sorted(points)
+    # Tiling: a pattern on the border shows up as half a pattern where the next
+    # block starts. Reported always, gated when the plan declares a margin.
+    margin = edge_margin_report(loaded, points)
+    margin_ok = True
+    if tiling_min_margin is not None and margin.get("applicable"):
+        margin_ok = int(margin["minimum_margin"] or 0) >= int(tiling_min_margin)
+    report["tiling"] = {
+        **margin,
+        "declared_minimum_margin": tiling_min_margin,
+        "ok": margin_ok,
+    }
     report["budget"] = budget
     report["structure"] = structure
     report["consistent"] = bool(
@@ -1153,6 +1286,7 @@ def accent_audit(
         and report["clusters_ok"]
         and report["edge_ok"]
         and gap_ok
+        and margin_ok
         and structure["ok"]
     )
     reasons: list[str] = []
@@ -1179,6 +1313,16 @@ def accent_audit(
             waived_reasons.append(message)
         else:
             reasons.append(message)
+    if not margin_ok:
+        edge = report["tiling"]
+        reasons.append(
+            "pattern pixels reach the tile edge: %d pixel(s) sit on row 0/15 or column 0/15, and "
+            "the declared minimum margin is %d (measured %s). A block texture is tiled, so a "
+            "marker on the border shows up as half a marker where the next block starts, which "
+            "reads as a seam. Six of the eight vanilla ores keep a margin of 1; only emerald "
+            "touches the edge. Move the pattern in, or declare a smaller tiling_min_margin"
+            % (edge["border_pixels"], tiling_min_margin, edge["minimum_margin"])
+        )
     reasons.extend(structure_reasons)
     report["reasons"] = reasons
     report["waived_reasons"] = waived_reasons

@@ -391,6 +391,7 @@ def validate_style(
     appearance: object,
     rendered: Image.Image,
     accent_points: set[tuple[int, int]] | None = None,
+    asset_category: str = "",
 ) -> ValidationResult:
     """Check the art-quality budgets the plan declared, on the finished sprite.
 
@@ -411,7 +412,24 @@ def validate_style(
     caller can watch the metric before it decides to gate on it.
     """
     from .appearance import declared_base_swatches
-    from .style import accent_audit, band_report
+    from .style import (
+        DEPOSIT_CATEGORIES,
+        ITEM_ACCENT_GAP_MAX,
+        ITEM_ACCENT_GAP_MIN,
+        accent_audit,
+        band_report,
+    )
+
+    # Which band applies, and whether the plan chose it. An undeclared band means
+    # "the engine's ITEM band", which is right for an item and wrong for an ore --
+    # so the two facts are kept apart and the audit is told both.
+    declared_gap_min = getattr(appearance, "accent_base_gap_min", None)
+    declared_gap_max = getattr(appearance, "accent_base_gap_max", None)
+    band_declared = declared_gap_min is not None or declared_gap_max is not None
+    gap_min = declared_gap_min if declared_gap_min is not None else ITEM_ACCENT_GAP_MIN
+    gap_max = declared_gap_max if declared_gap_max is not None else ITEM_ACCENT_GAP_MAX
+    if asset_category in DEPOSIT_CATEGORIES and not band_declared:
+        gap_min, gap_max = ITEM_ACCENT_GAP_MIN, ITEM_ACCENT_GAP_MAX
 
     base_swatches = declared_base_swatches(appearance)  # type: ignore[arg-type]
     audit = accent_audit(
@@ -432,10 +450,13 @@ def validate_style(
         bar_fill_max=getattr(appearance, "accent_bar_fill_max", 0.75),
         bar_min_aspect=getattr(appearance, "accent_bar_min_aspect", 1.8),
         bar_min_pixels=getattr(appearance, "accent_bar_min_pixels", 10),
-        accent_base_gap_min=getattr(appearance, "accent_base_gap_min", 6.0),
-        accent_base_gap_max=getattr(appearance, "accent_base_gap_max", 24.0),
+        accent_base_gap_min=gap_min,
+        accent_base_gap_max=gap_max,
         accent_base_edge_mean_max=getattr(appearance, "accent_base_edge_mean_max", 35.0),
         threshold_waiver=getattr(appearance, "threshold_waiver", ""),
+        asset_category=asset_category,
+        gap_band_declared=band_declared,
+        tiling_min_margin=getattr(appearance, "tiling_min_margin", None),
         points=accent_points,
     )
     bands = band_report(
@@ -509,6 +530,9 @@ def validate_style(
         "accent_unaudited_pixels": int(unaudited["unaudited_pixels"]),
         "accent_unaudited_clusters": int(unaudited["clusters"]),
         "accent_unaudited_ok": bool(unaudited["ok"]),
+        "tiling_minimum_margin": audit["tiling"].get("minimum_margin"),
+        "tiling_border_pixels": int(audit["tiling"].get("border_pixels") or 0),
+        "tiling_ok": bool(audit["tiling"]["ok"]),
         "band_count": int(bands["band_count"]),
         "band_isolated_pixels": int(bands["isolated_pixels"]),
         "band_isolated_share": float(bands["isolated_share"]),
@@ -845,25 +869,33 @@ def validate_reference_notes(
             #
             # Not "mentions another reference": a note on an ore reference
             # legitimately says its specks are "overlaid on the stone base", and
-            # `stone` is another attached reference. Firing on that would punish
-            # the notes that explain a composite choice. The dangerous note is the
-            # one arguing for a DIFFERENT reference -- it names one and says to
-            # choose/use/attach it -- because that note belongs on the other
-            # reference and was copied here.
-            if _CHOICE_VERB.search(text):
-                for other in names + pool_names:
-                    if other == holder or len(other) < 3:
-                        continue
-                    if re.search(
-                        r"(?<![a-z0-9_])%s(?![a-z0-9_])" % re.escape(other.lower()), text.lower()
-                    ):
-                        problems.append(
-                            "reference '%s' carries a note that argues for '%s', a different "
-                            "reference: the note names something else as the one to use, so it "
-                            "describes something other than what it is attached to -- %r"
-                            % (holder, other, text[:120])
-                        )
-                        break
+            # `stone` is another attached reference. Nor is it "contains a choice
+            # verb anywhere" -- a provenance note saying the band was "measured
+            # from the attached iron_ore reference" is describing what happened,
+            # not arguing for it. The dangerous note is a DIRECTIVE naming the
+            # other reference: it says to use/choose/prefer that one, so it
+            # belongs on the other reference and was copied here.
+            directive_fired = False
+            for other in names + pool_names:
+                if other == holder or len(other) < 3:
+                    continue
+                directive = re.compile(
+                    r"\b(?:use|choose|select|prefer|pick)\b[^.]{0,30}?\b%s\b"
+                    r"|\b%s\b[^.]{0,20}?\b(?:instead|rather than)\b" % (
+                        re.escape(other.lower()), re.escape(other.lower())
+                    ),
+                    re.IGNORECASE,
+                )
+                if directive.search(text):
+                    problems.append(
+                        "reference '%s' carries a note that argues for '%s', a different "
+                        "reference: the note names something else as the one to use, so it "
+                        "describes something other than what it is attached to -- %r"
+                        % (holder, other, text[:120])
+                    )
+                    directive_fired = True
+                    break
+            del directive_fired
 
             # (b) forbidding itself, by name or by LAYER.
             #

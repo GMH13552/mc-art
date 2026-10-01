@@ -474,9 +474,23 @@ class AppearanceSpec:
     # A band, not a ceiling: an upper bound alone made "erase the accent" a
     # passing strategy, and the sign is part of the relationship -- an accent
     # darker than its base is a different thing from one brighter than it.
-    accent_base_gap_min: float | None = 6.0
-    accent_base_gap_max: float | None = 24.0
+    #
+    # LEAVING THESE UNSET MEANS "use the engine's ITEM band" (6..24). That band
+    # describes an accent ON AN ITEM -- a rune, a gem highlight -- and it does NOT
+    # describe an ore deposit: measured per deposit, eight vanilla ores run from
+    # -75.7 (redstone) to +106.6 (gold), and none falls inside it. An asset whose
+    # category is a deposit must declare its own band, taken from the references it
+    # measured; `mc-art gap-from-refs` measures one. Treating the item band as an
+    # ore standard is what cost a real project seven rounds of tuning.
+    accent_base_gap_min: float | None = None
+    accent_base_gap_max: float | None = None
     accent_base_edge_mean_max: float | None = 35.0
+    # A block texture is TILED, so a pattern pixel on row 0/15 or column 0/15 shows
+    # up as half a pattern where the next block starts -- a seam. Six of the eight
+    # vanilla ores keep at least one pixel of margin; only emerald touches the
+    # border. Declare the margin this asset needs; cross-shaped sprites, plants and
+    # block-entity faces are not tiled and should leave it unset.
+    tiling_min_margin: int | None = None
     # Blend an authored accent toward the material around it, so it is set in
     # rather than pasted on. 0 disables.
     accent_embed: float = 0.0

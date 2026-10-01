@@ -19,6 +19,7 @@ from .contracts import ReferenceAsset, ReferenceRole
 from .evidence import _appearance_reference_evidence, shape_authority
 from .group_index import GroupReferenceSource
 from .planfile import plan_from_file
+from .style import ITEM_ACCENT_GAP_MAX, ITEM_ACCENT_GAP_MIN, ORE_ACCENT_GAP_RANGE
 from .project_settings import SourcePlan, plan_sources
 from .reference_index import build_index
 
@@ -434,6 +435,75 @@ def _refclass(args: argparse.Namespace) -> int:
             print("  %-24s declared=%-14s attached=%s%s" % (
                 plan_name, plan.descriptor.reference_class or "-", attached, mark))
     return 1 if failures else 0
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    """One command for every environment question that has bitten this project."""
+    from .doctor import main as doctor_main
+
+    return doctor_main([])
+
+
+def _gap_from_refs(args: argparse.Namespace) -> int:
+    """Measure the embedding band from references, rather than guessing at it.
+
+    The same measurement as `scripts/measure-accent-gap.py`, reachable where the
+    error message points. Two figures, deliberately: the per-deposit range is what
+    `accent_base_gap_min/max` means, and the per-pixel range is the sharper
+    boundary figure. Averaging a whole deposit into one number first is how the
+    engine's own 12.24 was produced -- a middling value that then mis-measured
+    every ore.
+    """
+    import importlib.util
+    import json as _json
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "measure-accent-gap.py"
+    if not script.exists():
+        print("gap-from-refs: %s is not present in this installation" % script, file=sys.stderr)
+        return 2
+    spec = importlib.util.spec_from_file_location("measure_accent_gap", script)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    paths = [Path(item) for item in args.textures]
+    if args.dir:
+        paths.extend(sorted(Path(args.dir).glob("*.png")))
+    if not paths:
+        print("gap-from-refs: give textures or --dir", file=sys.stderr)
+        return 2
+
+    rows = [module.measure(path) for path in paths if path.exists()]
+    if args.json:
+        print(_json.dumps(rows, indent=2))
+        return 0
+
+    deposits: list[float] = []
+    print("%-16s %-8s %-30s %s" % (
+        "reference", "base", "PER DEPOSIT (declare this)", "PER PIXEL (boundary)"))
+    for row in rows:
+        if "per_deposit" not in row:
+            print("%-16s %-8s %s" % (row["name"], row.get("base_luma_mean", "-"), row.get("note", "?")))
+            continue
+        dep, pix = row["per_deposit"], row["per_pixel"]
+        deposits.extend([dep["min"], dep["max"]])
+        print("%-16s %-8s %+7.1f .. %+7.1f (med %+.1f)   %+7.1f .. %+7.1f (n=%d)" % (
+            row["name"], row["base_luma_mean"], dep["min"], dep["max"], dep["median"],
+            pix["min"], pix["max"], pix["count"]))
+    if deposits:
+        print()
+        print("Declare these -- per deposit, which is what accent_base_gap_min/max means:")
+        print('  "accent_base_gap_min": %+.1f,' % min(deposits))
+        print('  "accent_base_gap_max": %+.1f,' % max(deposits))
+        print()
+        print("The engine's default (%.1f..%.1f) is the ITEM band: one item's accent, averaged."
+              % (ITEM_ACCENT_GAP_MIN, ITEM_ACCENT_GAP_MAX))
+        print("The eight vanilla ores run %.1f to %.1f per deposit, none of them inside it."
+              % ORE_ACCENT_GAP_RANGE)
+        print("Mask definition matters: this uses a local-median chroma rule, so a different")
+        print("mask gives different numbers. Declare from your own measurement and say which.")
+    return 0
 
 
 def _why_reference(args: argparse.Namespace) -> int:
@@ -1142,6 +1212,20 @@ def build_parser() -> argparse.ArgumentParser:
     refclass.add_argument("names", nargs="*", help="names to classify, e.g. deepslate iron_ore")
     refclass.add_argument("--plans", help="a directory of *.plan.json to audit by class")
     refclass.set_defaults(handler=_refclass)
+
+    doctor = sub.add_parser(
+        "doctor",
+        help="check this machine and this installation: interpreters, entry points, "
+             "line endings, writability, engine copies")
+    doctor.set_defaults(handler=_doctor)
+
+    gap = sub.add_parser(
+        "gap-from-refs",
+        help="measure the accent-to-base luma gap of reference textures, per deposit and per pixel")
+    gap.add_argument("textures", nargs="*", help="reference PNGs")
+    gap.add_argument("--dir", help="a reference root; every *.png in it")
+    gap.add_argument("--json", action="store_true")
+    gap.set_defaults(handler=_gap_from_refs)
 
     audit = sub.add_parser(
         "audit",

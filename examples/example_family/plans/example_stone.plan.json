@@ -28,11 +28,19 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["stone", "block face"],
+        "recognition_terms": [
+          "stone",
+          "block face"
+        ],
         "contour_intent": "surface"
       }
     ],
-    "negative_identities": ["ore", "metal", "moss", "cobblestone"],
+    "negative_identities": [
+      "ore",
+      "metal",
+      "moss",
+      "cobblestone"
+    ],
     "orientation": "flat, tiles seamlessly",
     "reference_strategy": "Pattern-sample vanilla stone through the face's own declared region, so the mottling keeps its full local contrast, then map that value rhythm through this family's cool grey-blue ramp. The silhouette is a full opaque face; only the material changes.",
     "shape_edit_mode": "appearance_only",
@@ -52,7 +60,9 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["stone"],
+        "recognition_terms": [
+          "stone"
+        ],
         "contour_intent": "surface"
       }
     ],
@@ -62,7 +72,10 @@
         "part_id": "face",
         "primitive": "custom_mask",
         "params": {
-          "offset": [0, 0],
+          "offset": [
+            0,
+            0
+          ],
           "marker": "X",
           "rows": [
             "XXXXXXXXXXXXXXXX",
@@ -92,7 +105,12 @@
       {
         "id": "face_all",
         "part_id": "face",
-        "bbox": [0, 0, 16, 16],
+        "bbox": [
+          0,
+          0,
+          16,
+          16
+        ],
         "face": "all",
         "required": true,
         "notes": "one declared region covering the whole face; pattern sampling normalises the source value range inside it, which is what keeps the local contrast instead of collapsing it"
@@ -110,7 +128,13 @@
     },
     "parts": {
       "face": {
-        "colors": ["stone_1", "stone_2", "stone_3", "stone_4", "stone_5"],
+        "colors": [
+          "stone_1",
+          "stone_2",
+          "stone_3",
+          "stone_4",
+          "stone_5"
+        ],
         "material": "stone",
         "shade_axis": "none",
         "noise": 0.0,
@@ -133,13 +157,18 @@
     "accent_budget": 0,
     "accent_colors": [],
     "band_maximum_isolated": 0.1,
-    "band_maximum_step": 30
+    "band_maximum_step": 30,
+    "tiling_min_margin": 1
   },
   "references": [
     {
       "path": "../refs/stone.png",
       "name": "stone",
-      "roles": ["shape", "material", "pixel_style"],
+      "roles": [
+        "shape",
+        "material",
+        "pixel_style"
+      ],
       "notes": [
         "group=minecraft:block/stone",
         "the whole family is built from this one stone face; the ore reuses this exact reference, palette and sampling mode so its base comes out byte-identical"

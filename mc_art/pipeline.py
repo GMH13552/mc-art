@@ -34,6 +34,7 @@ from .contracts import (
 from .geometry import CompiledGeometry, compile_geometry
 from .packaging import build_resourcepack
 from .reference_geometry import (
+    contour_conformance_blocked_by_uv_regions,
     reference_fallback_geometry,
     reference_partition_geometry,
     reference_silhouette_partition,
@@ -1303,6 +1304,19 @@ class GenerationPipeline:
         active_plan = plan
         locked_reference_geometry = None
         if _reference_shape_is_locked(plan.descriptor):
+            # Two declarations that cancel each other must say so. The uv_regions
+            # guard in reference_geometry is correct and was silent: on a block it
+            # costs nothing, on an item it renders the canvas opaque.
+            blocked = contour_conformance_blocked_by_uv_regions(
+                plan.geometry,
+                plan.descriptor.shape_edit_mode,
+                plan.references,
+                plan.request.width,
+                plan.request.height,
+                plan.request.name,
+            )
+            if blocked:
+                print("WARNING: %s" % blocked)
             locked_reference_geometry = reference_partition_geometry(
                 plan.descriptor,
                 plan.references,
@@ -1700,6 +1714,9 @@ class GenerationPipeline:
             active_plan.appearance,
             sprite,
             accent_points=accent_sink.get("points") or None,
+            # The asset's category decides which embedding band is even applicable:
+            # an ore deposit is not an item with a decoration on it.
+            asset_category=active_plan.descriptor.reference_class,
         )
         # Now that the measurements exist, check that this plan did not widen the
         # ruler it is measured against and then only just pass.

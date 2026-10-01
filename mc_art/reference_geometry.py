@@ -81,6 +81,48 @@ def _same_size_shape_reference(
     return candidates[0]
 
 
+def contour_conformance_blocked_by_uv_regions(
+    geometry: GeometrySpec,
+    shape_edit_mode: str,
+    references: list[ReferenceAsset] | None,
+    width: int,
+    height: int,
+    preferred_name: str = "",
+) -> str:
+    """Why contour conformance is about to be skipped, or "" when it is not.
+
+    The guard below is correct: a UV atlas has its own validated alpha authority
+    and this must not second-guess it. What was wrong is that it was SILENT, and
+    the same field is harmless on a block and destroys an item: carry
+    ``uv_regions`` from a block template into an item plan and the item renders as
+    a full opaque rectangle -- measured on a real project, 0 transparent pixels
+    against vanilla's 188 -- with no message anywhere saying a gate had been
+    switched off.
+
+    So the condition is stated out loud, in the terms the two declarations use:
+    one of them says "copy the reference's contour", the other says "this canvas
+    already has its own alpha authority".
+    """
+    if not geometry.uv_regions:
+        return ""
+    mode = str(shape_edit_mode or "").strip().lower()
+    if mode not in {"appearance_only", "preserve_silhouette"}:
+        return ""
+    if _same_size_shape_reference(references, width, height, preferred_name) is None:
+        # Conformance would not have applied here anyway, so nothing was lost and
+        # there is nothing to report.
+        return ""
+    return (
+        "contour conformance was SKIPPED: this plan declares shape_edit_mode '%s' (copy the "
+        "reference's contour) and also declares geometry.uv_regions (%d region(s)), which claims "
+        "its own alpha authority. The uv_regions guard wins, so the reference silhouette is NOT "
+        "applied. On a block face this is usually harmless because the reference is opaque "
+        "anyway; on an item or entity it renders the whole canvas opaque -- a real project got 0 "
+        "transparent pixels where vanilla has 188. Remove geometry.uv_regions from the plan "
+        "unless this canvas really is an atlas." % (mode, len(geometry.uv_regions))
+    )
+
+
 def reference_silhouette_partition(
     descriptor: ShapeDescriptor,
     geometry: GeometrySpec,

@@ -17,7 +17,7 @@ survived is the part that was never a model's job.
 
 ```
 bin/mc-art          the whole tool surface
-mc_art/             the engine (22 modules, Pillow + stdlib)
+mc_art/             the engine (34 modules, Pillow + stdlib)
 examples/           working plans to start from; example_family/ is a whole
                     family plus the script that builds and re-measures it
 layouts/            shipped vanilla UV layouts

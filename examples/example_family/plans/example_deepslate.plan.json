@@ -29,11 +29,20 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["deepslate", "stone", "block face"],
+        "recognition_terms": [
+          "deepslate",
+          "stone",
+          "block face"
+        ],
         "contour_intent": "surface"
       }
     ],
-    "negative_identities": ["ore", "blackstone", "coal", "surface stone"],
+    "negative_identities": [
+      "ore",
+      "blackstone",
+      "coal",
+      "surface stone"
+    ],
     "orientation": "flat, tiles seamlessly",
     "reference_strategy": "Pattern-sample vanilla deepslate through the face's declared region so its layered banding survives at full contrast, then push the whole ramp down the value axis while keeping the same cool hue as example_stone. A deep variant is a value change, never a hue change.",
     "shape_edit_mode": "appearance_only",
@@ -53,7 +62,9 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["deepslate"],
+        "recognition_terms": [
+          "deepslate"
+        ],
         "contour_intent": "surface"
       }
     ],
@@ -63,7 +74,10 @@
         "part_id": "face",
         "primitive": "custom_mask",
         "params": {
-          "offset": [0, 0],
+          "offset": [
+            0,
+            0
+          ],
           "marker": "X",
           "rows": [
             "XXXXXXXXXXXXXXXX",
@@ -93,7 +107,12 @@
       {
         "id": "face_all",
         "part_id": "face",
-        "bbox": [0, 0, 16, 16],
+        "bbox": [
+          0,
+          0,
+          16,
+          16
+        ],
         "face": "all",
         "required": true,
         "notes": "one declared region; the source's layered banding is normalised inside it"
@@ -111,7 +130,13 @@
     },
     "parts": {
       "face": {
-        "colors": ["deep_1", "deep_2", "deep_3", "deep_4", "deep_5"],
+        "colors": [
+          "deep_1",
+          "deep_2",
+          "deep_3",
+          "deep_4",
+          "deep_5"
+        ],
         "material": "stone",
         "shade_axis": "none",
         "noise": 0.0,
@@ -134,13 +159,18 @@
     "accent_budget": 0,
     "accent_colors": [],
     "band_maximum_isolated": 0.1,
-    "band_maximum_step": 30
+    "band_maximum_step": 30,
+    "tiling_min_margin": 1
   },
   "references": [
     {
       "path": "../refs/deepslate.png",
       "name": "deepslate",
-      "roles": ["shape", "material", "pixel_style"],
+      "roles": [
+        "shape",
+        "material",
+        "pixel_style"
+      ],
       "notes": [
         "group=minecraft:block/deepslate",
         "the deep member of the family: layered banding, same cool hue, lower value"
