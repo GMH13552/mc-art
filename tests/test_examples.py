@@ -96,7 +96,7 @@ def test_the_accented_members_declare_their_whole_accent_contract() -> None:
         "example_ore": (70, 1),
         "example_deepslate_ore": (70, 1),
         "example_raw_ore": (27, 3),
-        "example_ingot": (24, 1),
+        "example_ingot": (12, 1),
     }
     for name, (budget, minimum) in expected.items():
         data = json.loads((FAMILY / (name + ".plan.json")).read_text(encoding="utf-8"))

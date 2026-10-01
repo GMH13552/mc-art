@@ -437,9 +437,13 @@ class AppearanceSpec:
     accent_bar_fill_max: float | None = 0.75
     accent_bar_min_aspect: float | None = 1.8
     accent_bar_min_pixels: int | None = 10
-    # Embedded or pasted on. Vanilla iron_ore measures accent-base gap 12.2 and
-    # accent-boundary step mean 23.3 -- its flecks nearly dissolve in their stone.
-    accent_base_gap_max: float | None = 20.0
+    # Embedded or pasted on. Vanilla iron_ore's specks sit +12.24 luma ABOVE
+    # their stone (142.6 against 130.3), with an accent-boundary step of 23.3.
+    # A band, not a ceiling: an upper bound alone made "erase the accent" a
+    # passing strategy, and the sign is part of the relationship -- an accent
+    # darker than its base is a different thing from one brighter than it.
+    accent_base_gap_min: float | None = 6.0
+    accent_base_gap_max: float | None = 24.0
     accent_base_edge_mean_max: float | None = 35.0
     # Blend an authored accent toward the material around it, so it is set in
     # rather than pasted on. 0 disables.

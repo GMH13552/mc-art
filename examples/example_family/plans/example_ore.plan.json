@@ -159,10 +159,10 @@
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_colors": [
-      "#8E6B44",
-      "#7C5C39",
-      "#6A4E2F",
-      "#553E25"
+      "#B69A7B",
+      "#947C60",
+      "#746048",
+      "#564634"
     ],
     "accent_budget": 70,
     "accent_min_cluster": 1,
@@ -174,12 +174,12 @@
       "chroma_min": 40,
       "brightest_percent": 100,
       "ramp": [
-        "#8E6B44",
-        "#7C5C39",
-        "#6A4E2F",
-        "#553E25"
+        "#B69A7B",
+        "#947C60",
+        "#746048",
+        "#564634"
       ],
-      "embed": 0.35,
+      "embed": 0.2,
       "rim": 0
     },
     "band_maximum_isolated": 0.1,

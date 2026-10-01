@@ -432,7 +432,8 @@ def validate_style(
         bar_fill_max=getattr(appearance, "accent_bar_fill_max", 0.75),
         bar_min_aspect=getattr(appearance, "accent_bar_min_aspect", 1.8),
         bar_min_pixels=getattr(appearance, "accent_bar_min_pixels", 10),
-        accent_base_gap_max=getattr(appearance, "accent_base_gap_max", 20.0),
+        accent_base_gap_min=getattr(appearance, "accent_base_gap_min", 6.0),
+        accent_base_gap_max=getattr(appearance, "accent_base_gap_max", 24.0),
         accent_base_edge_mean_max=getattr(appearance, "accent_base_edge_mean_max", 35.0),
         threshold_waiver=getattr(appearance, "threshold_waiver", ""),
         points=accent_points,
@@ -475,6 +476,7 @@ def validate_style(
         "accent_bar_clusters": int(audit["structure"]["shape"]["bar_clusters"]),
         "accent_bar_ok": bool(audit["structure"]["shape"]["ok"]),
         "accent_base_gap_mean": audit["accent_base_gap_mean"],
+        "accent_base_signed_gap": audit["accent_base_signed_gap"],
         "accent_edge_delta_mean": audit["edge_delta_mean"],
         "accent_base_gap_ok": bool(audit["base_gap_ok"]),
         # Exported so a re-audit of the delivered PNG (the example build does

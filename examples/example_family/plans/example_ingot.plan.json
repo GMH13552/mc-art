@@ -109,11 +109,7 @@
       "steel_2": "#3B424F",
       "steel_3": "#4E5666",
       "steel_4": "#646D80",
-      "steel_5": "#7E8799",
-      "star_core": "#FFE3B0",
-      "star_light": "#F0BE6E",
-      "star_mid": "#CF9440",
-      "star_rim": "#8E5C1C"
+      "steel_5": "#7E8799"
     },
     "parts": {
       "ingot": {
@@ -146,56 +142,29 @@
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_colors": [
-      "#BFAE93",
-      "#A8977E",
-      "#8F8068",
-      "#6A6050"
+      "#84795F",
+      "#756B53",
+      "#645B45",
+      "#4F4736"
     ],
-    "accent_budget": 24,
+    "accent_budget": 12,
     "accent_min_cluster": 1,
     "accent_cleanup": false,
     "accent_edge_max": 90,
-    "threshold_waiver": "the accent IS this item's own lighting, taken from iron_ingot's brightest pixels, so its edge step is iron_ingot's own contrast (measured 83) rather than an authored deposit's. The family's reference of 60 is calibrated for a deposit on stone; an item whose highlight is its own lit face legitimately exceeds it. Declared here so the relaxation is visible rather than silent.",
     "accent_from_reference": {
       "source": "iron_ingot",
-      "brightest_percent": 5,
+      "brightest_percent": 4,
       "ramp": [
-        "#BFAE93",
-        "#A8977E",
-        "#8F8068",
-        "#6A6050"
+        "#84795F",
+        "#756B53",
+        "#645B45",
+        "#4F4736"
       ],
-      "embed": 0.72,
-      "rim": 0.25
+      "embed": 0.35,
+      "rim": 0.15
     },
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30,
-    "pixel_map": {
-      "legend": {
-        "1": "#FFE3B0",
-        "2": "#F0BE6E",
-        "3": "#CF9440",
-        "4": "#8E5C1C"
-      },
-      "rows": [
-        "................",
-        "................",
-        "................",
-        "................",
-        ".....43334......",
-        "....4321234.....",
-        ".....43334......",
-        "................",
-        "................",
-        "................",
-        "................",
-        "................",
-        "................",
-        "................",
-        "................",
-        "................"
-      ]
-    },
     "accent_ramp_min_levels": null,
     "accent_ramp_min_monotone": null
   },

@@ -562,6 +562,10 @@ def _ramp_monotone_share(
     return round(falling, 4)
 
 
+# Vanilla iron_ore: accent luma 142.6 against a base of 130.3.
+VANILLA_ACCENT_GAP = 12.24
+
+
 def _bar_shape(cluster: set[tuple[int, int]], *, fill_max: float, min_aspect: float) -> dict[str, Any]:
     """Is this accent a filled, elongated rectangle -- a bar pasted on?
 
@@ -800,8 +804,10 @@ def accent_audit(
     bar_fill_max: float | None = 0.75,
     bar_min_aspect: float | None = 1.8,
     bar_min_pixels: int | None = 10,
-    accent_base_gap_max: float | None = 20.0,
+    accent_base_gap_min: float | None = 6.0,
+    accent_base_gap_max: float | None = 24.0,
     accent_base_edge_mean_max: float | None = 35.0,
+    accent_base_sign_positive: bool = True,
     threshold_waiver: str = "",
     points: set[tuple[int, int]] | None = None,
 ) -> dict[str, Any]:
@@ -940,16 +946,40 @@ def accent_audit(
     report["accent_luma_mean"] = (
         round(sum(accent_lumas) / len(accent_lumas), 2) if accent_lumas else None
     )
+    report["base_luma_mean"] = (
+        round(sum(luma(pixels[point]) for point in base_points) / len(base_points), 2)
+        if base_points else None
+    )
+    # Signed, because the direction is part of the relationship, not just the
+    # magnitude: vanilla's specks are brighter than their stone.
+    report["accent_base_signed_gap"] = (
+        round(report["accent_luma_mean"] - report["base_luma_mean"], 2)
+        if report["accent_luma_mean"] is not None and report["base_luma_mean"] is not None
+        else None
+    )
     report["within_budget"] = budget is None or len(points) <= budget
     report["clusters_ok"] = sum(undersized) == 0
     report["edge_ok"] = edge_max is None or (report["edge_delta_p90"] or 0.0) <= edge_max
-    # Embedded, or pasted on? Vanilla iron_ore: gap 12.2, edge mean 23.3, p90 43.4.
+    # Embedded, or pasted on?
     #
-    # Not applicable when there is no accent, or when the sprite has no base for
-    # an accent to sit in -- a fixture that paints one dot on transparency has no
-    # "material it is set into", and asking the question there is a category
-    # error, not a failure.
+    # Vanilla iron_ore: accent luma 142.6, base 130.3, so the specks sit +12.24
+    # ABOVE their stone, and the boundary steps by 23.3 mean / 43.4 p90. Three
+    # things therefore have to be judged, not one:
+    #
+    #   * too far and it is pasted on (the ingot measured +43.4);
+    #   * too near -- and "near" includes *below* -- and it is smeared into the
+    #     base until it is not an accent at all (the ore measured +2.80 after an
+    #     over-corrected embed);
+    #   * the SIGN matters. Vanilla's ore specks are brighter than their stone.
+    #     An accent that is darker than its base, even with a respectable
+    #     magnitude, is a different relationship, so a magnitude-only band would
+    #     call it correct and a person would not.
+    #
+    # An upper bound alone was the design error here: it made "erase the accent"
+    # a passing strategy, which is how "too faint" and "too loud" became the same
+    # kind of mistake in opposite directions.
     gap = report["accent_base_gap_mean"] or 0.0
+    signed = report["accent_base_signed_gap"]
     edge_mean = report["edge_delta_mean"] or 0.0
     # Not applicable when there is no accent, no base pixels under it, no declared
     # base material -- or only a single accent pixel. Embedding is a relationship
@@ -958,17 +988,45 @@ def accent_audit(
     gap_applicable = (
         len(points) >= 2 and bool(base_points) and bool(base_colors)
     )
-    gap_ok = (
-        accent_base_gap_max is None
-        or not gap_applicable
-        or (gap <= accent_base_gap_max and edge_mean <= accent_base_edge_mean_max)
-    )
+    gap_reasons: list[str] = []
+    if gap_applicable and accent_base_gap_max is not None:
+        too_loud = signed > accent_base_gap_max
+        too_faint = accent_base_gap_min is not None and signed < accent_base_gap_min
+        reversed_sign = accent_base_sign_positive and signed <= 0.0
+        if too_loud or too_faint or reversed_sign:
+            if reversed_sign:
+                diagnosis = (
+                    "and it is on the WRONG SIDE -- the accent is %.1f luma DARKER than its "
+                    "base, where vanilla's ore specks are %.1f luma BRIGHTER" % (gap, VANILLA_ACCENT_GAP)
+                )
+            elif too_loud:
+                diagnosis = "too loud: pasted on rather than set in"
+            else:
+                diagnosis = "too faint: smeared into the base until it is barely an accent"
+            gap_reasons.append(
+                "accent is not embedded: the accent sits %+.1f luma from the material it is set "
+                "into, %s (vanilla iron_ore sits %+.1f; the band is %.1f..%.1f, and the accent "
+                "boundary may step by at most %.1f, measured %.1f)"
+                % (
+                    signed,
+                    diagnosis,
+                    VANILLA_ACCENT_GAP,
+                    accent_base_gap_min if accent_base_gap_min is not None else 0.0,
+                    accent_base_gap_max,
+                    accent_base_edge_mean_max or 0.0,
+                    edge_mean,
+                )
+            )
+    gap_ok = not gap_reasons
     report["base_gap"] = {
         "applicable": gap_applicable,
         "accent_base_gap_mean": report["accent_base_gap_mean"],
+        "accent_base_signed_gap": signed,
+        "vanilla_gap": VANILLA_ACCENT_GAP,
+        "minimum_gap": accent_base_gap_min,
+        "maximum_gap": accent_base_gap_max,
         "edge_delta_mean": report["edge_delta_mean"],
         "edge_delta_p90": report["edge_delta_p90"],
-        "maximum_gap": accent_base_gap_max,
         "maximum_edge_mean": accent_base_edge_mean_max,
         "ok": gap_ok,
     }
@@ -1010,14 +1068,8 @@ def accent_audit(
             "accent-to-base step p90 %.0f exceeds the declared maximum of %.0f"
             % (report["edge_delta_p90"] or 0.0, edge_max or 0.0)
         )
-    if accent_base_gap_max is not None and not gap_ok:
-        message = (
-            "accent is not embedded: accents sit %.1f luma from the material they are set "
-            "into (limit %.1f) and the accent boundary steps by %.1f (limit %.1f). Vanilla's "
-            "own iron_ore measures 12.2 / 23.3 -- its flecks nearly dissolve in their stone. "
-            "Add an embed/rim transition between the accent and the base"
-            % (gap, accent_base_gap_max, edge_mean, accent_base_edge_mean_max or 0.0)
-        )
+    # The reason text is built above, where the sign and the band are both known.
+    for message in gap_reasons:
         if gap_waived:
             # The verdict passed, so the message must not read as a failure.
             # Reported, not refused -- the same shape as a waived limit.
