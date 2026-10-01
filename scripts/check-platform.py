@@ -146,28 +146,132 @@ def _fault_docs() -> tuple[bool, str]:
     return fired, "found %d forbidden line(s): %s" % (len(problems), problems)
 
 
+# Line endings, per file, and the attribute that must back each one. `bin/mc-art`
+# has no extension, so it is named in full -- a `*.sh` pattern would not match it,
+# which is exactly how a CRLF copy of it got vendored into the npm package.
+LINE_ENDING_RULES = (
+    ("bin/mc-art", "lf"),
+    ("bin/mc-art.cmd", "crlf"),
+    ("bin/mc-art.ps1", "crlf"),
+    ("SKILL.md", "lf"),
+    ("scripts/check-platform.py", "lf"),
+)
+
+
+def git_check_attr(rel: str, repo: Path | None = None) -> str:
+    """What git says the `eol` attribute is for this path -- not what we assume.
+
+    Asserting "I added a .gitattributes file" is not the same as asserting the
+    rule takes effect. This asks git.
+    """
+    done = subprocess.run(
+        ["git", "check-attr", "eol", "--", rel],
+        cwd=str(repo or ROOT),
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if done.returncode != 0:
+        return "error: %s" % (done.stderr or "").strip()[:80]
+    # "bin/mc-art: eol: lf"
+    return (done.stdout or "").strip().rsplit(":", 1)[-1].strip()
+
+
+def check_line_endings() -> tuple[bool, str]:
+    """The working tree and the attributes must agree, file by file.
+
+    A CRLF shebang script does not run -- `bash: $'\\r': command not found` -- and
+    the broken copy is what gets vendored into the npm package. So both halves are
+    checked: the bytes on disk, and the rule that keeps them right on someone
+    else's clone.
+    """
+    problems: list[str] = []
+    for rel, want in LINE_ENDING_RULES:
+        path = ROOT / rel
+        if not path.exists():
+            problems.append("%s is missing" % rel)
+            continue
+        data = path.read_bytes()
+        has_cr = b"\r" in data
+        if want == "lf" and has_cr:
+            problems.append(
+                "%s contains %d CR byte(s): a CRLF copy of this file does not run, and it is "
+                "vendored as-is" % (rel, data.count(b"\r"))
+            )
+        if want == "crlf" and not has_cr:
+            problems.append("%s is LF-only; cmd.exe and PowerShell expect CRLF" % rel)
+        declared = git_check_attr(rel)
+        if declared != want:
+            problems.append(
+                "%s: .gitattributes resolves eol to '%s', expected '%s' -- without the rule a "
+                "clone with core.autocrlf=true gets the wrong endings" % (rel, declared, want)
+            )
+    if problems:
+        return False, "; ".join(problems)
+    return True, "%d file(s): endings on disk match the attributes git reports" % len(
+        LINE_ENDING_RULES
+    )
+
+
+def _fault_line_endings() -> tuple[bool, str]:
+    """Reverse fixture: a CRLF launcher, and a repository with no rule at all.
+
+    Both are the real defect. The first is what an autocrlf clone produced; the
+    second is the state of this repository before .gitattributes existed.
+    """
+    fired: list[str] = []
+    with tempfile.TemporaryDirectory() as scratch:
+        broken = Path(scratch) / "mc-art"
+        broken.write_bytes((ROOT / "bin" / "mc-art").read_bytes().replace(b"\n", b"\r\n"))
+        if b"\r" in broken.read_bytes():
+            fired.append(
+                "a CRLF launcher is detected (%d CR bytes)" % broken.read_bytes().count(b"\r")
+            )
+
+        # A repository that has the file but no rule: `git check-attr` answers
+        # "unspecified", which is the bug in its original form.
+        repo = Path(scratch) / "norule"
+        (repo / "bin").mkdir(parents=True)
+        (repo / "bin" / "mc-art").write_bytes((ROOT / "bin" / "mc-art").read_bytes())
+        subprocess.run(["git", "init", "-q"], cwd=str(repo), capture_output=True)
+        declared = git_check_attr("bin/mc-art", repo=repo)
+        if declared != "lf":
+            fired.append("a repository without the rule resolves eol to '%s'" % declared)
+    return len(fired) == 2, "; ".join(fired)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fault", action="store_true", help="run the reverse fixtures")
     args = parser.parse_args()
 
     if args.fault:
+        results = []
         print("REVERSE FIXTURE 1: an entry point that shells out to python3")
         ok, detail = _fault_entrypoint()
         print("  %s  %s" % ("PASS (went red as required)" if ok else "FAIL (did not go red)", detail))
-        first = ok
+        results.append(ok)
         print()
         print("REVERSE FIXTURE 2: a doc naming python3 as the entry point")
         ok2, detail2 = _fault_docs()
         print("  %s  %s" % ("PASS (went red as required)" if ok2 else "FAIL (did not go red)", detail2))
+        results.append(ok2)
         print()
-        print("fault gates: %s" % ("both red as required" if (first and ok2) else "ONE DID NOT FIRE"))
-        return 0 if (first and ok2) else 1
+        print("REVERSE FIXTURE 3: a CRLF launcher, and a repo with no .gitattributes rule")
+        ok3, detail3 = _fault_line_endings()
+        print("  %s  %s" % ("PASS (went red as required)" if ok3 else "FAIL (did not go red)", detail3))
+        results.append(ok3)
+        print()
+        print("fault gates: %s" % (
+            "all red as required" if all(results) else "ONE DID NOT FIRE"
+        ))
+        return 0 if all(results) else 1
 
     failures = 0
     for label, (ok, detail) in (
         ("platform entry point", check_entrypoint()),
         ("documentation", check_docs()),
+        ("line endings", check_line_endings()),
     ):
         print("%-24s %s  %s" % (label, "PASS" if ok else "FAIL", detail))
         failures += 0 if ok else 1

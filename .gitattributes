@@ -1,0 +1,53 @@
+# Line endings are pinned here, not left to whoever cloned the repository.
+#
+# This is not tidiness. Without this file, a clone with `core.autocrlf=true`
+# checks every text file out as CRLF -- and `bin/mc-art` has NO EXTENSION, so no
+# `*.sh` pattern would have covered it. A CRLF shebang script does not run:
+#
+#     $ bin/mc-art --help
+#     bash: bin/mc-art: /usr/bin/env: bad interpreter: No such file or directory
+#     bin/mc-art: line 1: $'\r': command not found
+#
+# and the broken copy is vendored straight into the npm package by the panel
+# build, so `npm install` hands people a POSIX launcher that cannot execute.
+# Measured before this file existed: bin/mc-art was 2020 B with 53 CR in an
+# autocrlf=true clone, against 1967 B with 0 CR here.
+#
+# The rule is about what each platform's own tooling expects, not about taste:
+# POSIX shells and Python reject CRLF; cmd.exe and PowerShell are happiest with
+# it. `scripts/check-platform.py` asserts both, and `git check-attr` is what it
+# asks -- a rule that exists in this file but does not take effect is the same
+# bug in a new costume.
+
+# --- the entry points -------------------------------------------------------
+# No extension, so it must be named in full: *.sh would not match it.
+bin/mc-art        text eol=lf
+*.sh              text eol=lf
+# Windows launchers: CRLF is what cmd.exe and PowerShell expect.
+*.cmd             text eol=crlf
+*.bat             text eol=crlf
+*.ps1             text eol=crlf
+
+# --- source and docs --------------------------------------------------------
+*.py              text eol=lf
+*.md              text eol=lf
+*.json            text eol=lf
+*.js              text eol=lf
+*.mjs             text eol=lf
+*.ts              text eol=lf
+*.txt             text eol=lf
+*.yml             text eol=lf
+*.yaml            text eol=lf
+.gitattributes    text eol=lf
+.gitignore        text eol=lf
+
+# --- never touched ----------------------------------------------------------
+# Assets must survive a checkout byte for byte: a jar whose bytes changed is a
+# different jar, and a PNG whose bytes changed has different pixels.
+*.png             binary
+*.jpg             binary
+*.jpeg            binary
+*.gif             binary
+*.jar             binary
+*.nbt             binary
+*.pyc             binary
