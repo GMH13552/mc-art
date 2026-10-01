@@ -22,8 +22,14 @@ examples/           working plans to start from; example_family/ is a whole
                     family plus the script that builds and re-measures it
 layouts/            shipped vanilla UV layouts
 scripts/            magnify / review_family / continuity
-tests/              168 tests over the engine
+tests/              182 tests over the engine
 ```
+
+Run them with `python -m pytest tests -q`. On a Windows box where
+`%TEMP%\pytest-of-GMH13` is a stale directory owned by another account, pytest
+cannot create its default temp root and reports a page of `PermissionError` that
+has nothing to do with this repository — pass `--basetemp=.pytest-tmp` (already
+gitignored).
 
 ## Who decides: you, or the engine
 

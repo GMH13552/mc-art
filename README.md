@@ -71,6 +71,24 @@ stretched planks.
 | `scripts/` | magnify / review_family / continuity |
 | `tests/` | 182 tests over the engine |
 
+## Running the tests
+
+```bash
+python -m pytest tests -q
+```
+
+On a Windows machine where `%TEMP%\pytest-of-GMH13` is a stale directory owned by
+another account, pytest cannot create its default temp root and reports a page of
+`PermissionError` that has nothing to do with this repository. Pass a temp root
+you own instead:
+
+```bash
+python -m pytest tests -q --basetemp=.pytest-tmp
+```
+
+`.pytest-tmp/` is gitignored. On any machine without that stale directory, the
+plain command is the correct one.
+
 Three modules are worth calling out. `vanilla_model` reads an entity model out of
 compiled, usually obfuscated bytecode, because a 1.12 asset root has no entity
 model files at all. `ingame` renders a block or entity model the way the game
