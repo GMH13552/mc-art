@@ -111,6 +111,33 @@ $M render --plan my.plan.json --out outputs/mine
 Step 4 takes about a second and needs no credentials. Iterate as long as the
 art needs: palette, sampling, mask shapes, highlight placement.
 
+### First question, before any plan: does this thing already exist in the game?
+
+**If it has a vanilla counterpart, use that counterpart's shape as the authority**
+(`shape_edit_mode: appearance_only` against it) and make the material yours. An
+ore block has `minecraft:block/iron_ore`; raw ore has `minecraft:item/raw_iron`;
+an ingot has `minecraft:item/iron_ingot`. Inventing a contour for an object the
+game already draws is how a delivery ends up with a raw ore that "doesn't
+reference raw iron at all" -- and the reference was sitting on disk the whole
+time.
+
+**If the contour really is new, say why.** A render with no usable reference and
+a `shape_edit_mode` other than `appearance_only` fails the `reference` stage
+unless `descriptor.reference_waiver` states the reason. It is one sentence and it
+turns a silent decision into a recorded one.
+
+The engine holds you to that, two ways it can tell you apart:
+
+* **`reference` stage** -- no reference was offered at all. Always a warning; an
+  error when the shape is not a plain recolour.
+* **`reference_pool` stage** -- a same-class reference was *available on your
+  reference root* and the plan did not attach it. Pass
+  `mc-art render --reference-pool <dir>` (or, from a script, set
+  `available_references` on the plan) and the engine compares the plan's
+  `references` against everything the root holds, scoring both sides by the
+  content words their names share with the asset. If the best unattached
+  candidate beats the best attached one, that is an error unless waived.
+
 ## The plan
 
 Start from `examples/bow_standby.plan.json`. Five keys; three matter:
@@ -190,6 +217,26 @@ $M audit outputs/example_ore/sprite.png \
 
 A budget of zero is the whole point of the plain-block rule: it cannot be
 satisfied by taste, only by having no accent pixels at all.
+
+### 2b. Structure: does it read as drawn, or stamped?
+
+The gates above are *violation* gates -- did a limit get broken. They cannot see
+the delivery a user rejected twice: four identical 8-pixel crosses on a grid
+breach no budget, no minimum cluster size and no edge limit. They are legal
+deposits, and the face still reads as a rubber stamp. Three more keys:
+
+| key | what it refuses |
+|---|---|
+| `accent_motif_repeat_max` | the same deposit **shape** (outline, position and shade removed) appearing more than this many times. Default 2: a deliberate pair is fine, a set of four is a stamp |
+| `accent_layout_min_size_cv` + `accent_layout_min_spacing_cv` | every deposit the same size **and** the same distance apart. Both spreads must be below their minimum before it fires, so an ore whose flecks happen to be similar in size is not punished |
+| `accent_ramp_min_pixels` / `_min_levels` / `_max_dominant_share` / `_min_monotone` | a deposit large enough to have an interior that spends itself on one flat shade. Every threshold is measured against vanilla: iron_ore's own specks score 4/4/3 levels, dominant shares 0.33-0.50, monotone 0.86-1.0 |
+
+They are calibrated on real art, not invented: `examples/example_family/fault_demo.py`
+keeps the **exact pixel maps of the rejected delivery** as fixtures
+(`--only motif-repeat`, `--only layout-grid`, `--only ramp-flat`), so each rule
+can be watched firing on the thing it was written for. `layout-grid` uses four
+*different* stamps on an even grid, which is what proves the layout rule is not
+the motif rule wearing a hat.
 
 ### 3. One family is one material axis *and* one accent axis
 

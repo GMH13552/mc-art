@@ -1,13 +1,22 @@
-"""Deterministic art-quality evidence: value bands, accent budget, family axes.
+"""Deterministic art-quality evidence: value bands, accents, structure, families.
 
-The three failures this module exists to make measurable are the ones a human
-keeps having to point at by hand:
+The failures this module exists to make measurable are the ones a human keeps
+having to point at by hand:
 
 * a stone or an ingot rendered as equal-value scatter instead of a value ramp;
 * "two jarring pixels" -- an accent that lands as an isolated speck rather than
   a readable deposit, and an accent whose edge against its base is a hard step;
 * a family whose members share a palette histogram but not a hue or value axis,
   so nobody can tell they are the same object.
+
+There are two kinds of gate here, and the split matters. **Violation gates** ask
+"did you break a rule": too many accent pixels, a cluster too small, an edge too
+hard. **Structure gates** ask "does this read as drawn rather than stamped": is
+one deposit shape pasted repeatedly, are the deposits evenly spaced, does a
+deposit actually use the value ramp it declared. A sprite can satisfy every
+violation gate and still be the thing a person rejects -- four identical 8-pixel
+stamps on a grid pass a budget, a minimum cluster size and an edge test -- which
+is why both kinds exist.
 
 Every number here is plain colour statistics over the rendered PNG. No model,
 no object vocabulary, no judgement about what the object *is* -- that stays with
@@ -428,6 +437,289 @@ def despeckle_accent(
     return loaded, set(points) - removed, len(removed)
 
 
+def _motif_shape(cluster: set[tuple[int, int]]) -> str:
+    """A cluster's shape with its size and position removed.
+
+    Crop to the bounding box and emit one character per cell, so two deposits
+    drawn from the same stamp produce the same string wherever they sit and
+    whatever shade each pixel took. That identity is the whole point: a budget
+    counts four deposits as four, and only this sees that they are one stamp.
+    """
+    xs = [point[0] for point in cluster]
+    ys = [point[1] for point in cluster]
+    left, top = min(xs), min(ys)
+    width, height = max(xs) - left + 1, max(ys) - top + 1
+    grid = [["." for _ in range(width)] for _ in range(height)]
+    for x, y in cluster:
+        grid[y - top][x - left] = "#"
+    return "/".join("".join(row) for row in grid)
+
+
+def _principal_axis(points: Sequence[tuple[int, int]]) -> tuple[float, float]:
+    """Major-axis direction of a small pixel set, as (cos, sin), plus spread."""
+    count = len(points)
+    if count < 2:
+        return 1.0, 0.0
+    mean_x = sum(point[0] for point in points) / count
+    mean_y = sum(point[1] for point in points) / count
+    xx = yy = xy = 0.0
+    for x, y in points:
+        dx, dy = x - mean_x, y - mean_y
+        xx += dx * dx
+        yy += dy * dy
+        xy += dx * dy
+    angle = 0.5 * atan2(2.0 * xy, xx - yy)
+    return cos(angle), sin(angle)
+
+
+def _coefficient_of_variation(values: Sequence[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    if mean <= 1e-9:
+        return 0.0
+    variance = sum((value - mean) ** 2 for value in values) / len(values)
+    return (variance ** 0.5) / mean
+
+
+def _centroid(cluster: set[tuple[int, int]]) -> tuple[float, float]:
+    return (
+        sum(point[0] for point in cluster) / len(cluster),
+        sum(point[1] for point in cluster) / len(cluster),
+    )
+
+
+def _mirror_score(centroids: Sequence[tuple[float, float]]) -> float:
+    """How well the centroid set maps onto itself under a mirror, 0..1.
+
+    Reported rather than gated: one asset may legitimately be symmetric, and a
+    symmetry test alone would call a deliberately symmetric emblem "stamped".
+    The layout verdict below uses spacing and scale spread instead.
+    """
+    if len(centroids) < 2:
+        return 0.0
+    width = max(point[0] for point in centroids) - min(point[0] for point in centroids)
+    height = max(point[1] for point in centroids) - min(point[1] for point in centroids)
+    scores: list[float] = []
+    for axis in ("x", "y"):
+        span = width if axis == "x" else height
+        if span <= 0:
+            continue
+        matched = 0
+        for point in centroids:
+            mirrored = (
+                (width - point[0], point[1]) if axis == "x" else (point[0], height - point[1])
+            )
+            nearest = min(
+                (abs(other[0] - mirrored[0]) + abs(other[1] - mirrored[1]))
+                for other in centroids
+            )
+            if nearest <= max(1.0, span * 0.2):
+                matched += 1
+        scores.append(matched / float(len(centroids)))
+    return round(max(scores), 3) if scores else 0.0
+
+
+def _ramp_monotone_share(
+    cluster: set[tuple[int, int]],
+    pixels: dict[tuple[int, int], tuple[int, int, int]],
+) -> float:
+    """Share of value rings around a deposit's bright core that fall off outward.
+
+    Monotonicity along an axis was the first attempt and it was wrong: it fails a
+    deposit whose brightest pixels are in the *middle*, which is precisely what a
+    sheen along an edge or a lit gem looks like. The structure that both a
+    directional ramp and a centre-bright streak share is **falloff from the
+    core**, so that is what is measured: group the deposit's pixels into rings by
+    distance from its brightest pixel(s), average each ring's value, and count
+    the ring-to-ring steps that go down.
+
+    A flat fill has one ring and scores 1.0 -- it is monotone by vacuity, and the
+    dominant-share gate is the one that has something to say about it. Shades
+    sprinkled at random put bright pixels in the outer rings, so the sequence
+    rises and the share drops.
+    """
+    if len(cluster) < 3:
+        return 1.0
+    core_luma = max(luma(pixels[point]) for point in cluster)
+    core = [point for point in cluster if luma(pixels[point]) >= core_luma - 1e-9]
+    rings: dict[float, list[float]] = {}
+    for point in cluster:
+        distance = min(
+            ((point[0] - other[0]) ** 2 + (point[1] - other[1]) ** 2) ** 0.5 for other in core
+        )
+        rings.setdefault(round(distance, 1), []).append(luma(pixels[point]))
+    if len(rings) < 2:
+        return 1.0
+    means = [
+        (distance, sum(values) / len(values)) for distance, values in sorted(rings.items())
+    ]
+    # A one-luma wobble between rings is rounding, not a rise.
+    steps = [
+        means[index + 1][1] - means[index][1] for index in range(len(means) - 1)
+    ]
+    falling = sum(1 for step in steps if step <= 2.0) / len(steps)
+    return round(falling, 4)
+
+
+def accent_structure_report(
+    points: set[tuple[int, int]],
+    pixels: dict[tuple[int, int], tuple[int, int, int]],
+    *,
+    motif_repeat_max: int | None = 2,
+    layout_min_size_cv: float | None = 0.15,
+    layout_min_spacing_cv: float | None = 0.15,
+    ramp_min_pixels: int | None = 6,
+    ramp_min_levels: int | None = 3,
+    ramp_max_dominant_share: float | None = 0.6,
+    ramp_min_monotone: float | None = 0.6,
+    ramp_level_step: float = 16.0,
+) -> tuple[dict[str, Any], list[str]]:
+    """Ask whether the accents look drawn rather than stamped.
+
+    Three independent questions, each with the fault it was written for:
+
+    * **motif repeat** -- the same deposit shape pasted around the face. Four
+      identical 8-pixel crosses are four legal deposits to a budget.
+    * **layout** -- every deposit the same size and the same distance apart, so
+      the face reads as a pattern. Needs both, not either: a real ore often has
+      deposits of similar size.
+    * **ramp use** -- a large deposit that spends its pixels on one shade. A
+      declared four-stop ramp that the raster uses as one dark blob is the
+      "jarring colour block" fault.
+
+    Returns the report and the list of failure reasons.
+    """
+    clusters = components(points)
+    sizes = [len(cluster) for cluster in clusters]
+    report: dict[str, Any] = {"clusters": len(clusters)}
+    reasons: list[str] = []
+
+    # -- motivation: is one shape pasted repeatedly? -------------------------
+    shapes = Counter(_motif_shape(cluster) for cluster in clusters)
+    repeat = max(shapes.values()) if shapes else 0
+    motif_ok = motif_repeat_max is None or repeat <= motif_repeat_max
+    report["motif"] = {
+        "distinct_shapes": len(shapes),
+        "repeat_max": repeat,
+        "repeat_max_allowed": motif_repeat_max,
+        "clusters": len(clusters),
+        "ok": motif_ok,
+    }
+    if not motif_ok:
+        reasons.append(
+            "accent motif repeat: one deposit shape appears %d times (limit %d); "
+            "vary the deposit shapes instead of stamping one"
+            % (repeat, motif_repeat_max)
+        )
+
+    # -- layout: all the same size, all the same distance apart? -------------
+    centroids = [_centroid(cluster) for cluster in clusters]
+    size_cv = _coefficient_of_variation([float(size) for size in sizes])
+    spacing = []
+    for index, centroid in enumerate(centroids):
+        others = [
+            ((centroid[0] - other[0]) ** 2 + (centroid[1] - other[1]) ** 2) ** 0.5
+            for other_index, other in enumerate(centroids)
+            if other_index != index
+        ]
+        if others:
+            spacing.append(min(others))
+    spacing_cv = _coefficient_of_variation(spacing)
+    quadrant_occupancy = len({
+        (0 if centroid[0] < 8 else 1, 0 if centroid[1] < 8 else 1)
+        for centroid in centroids
+    })
+    # A layout verdict needs at least three deposits: with two, "evenly spaced"
+    # and "same size" are not statements about anything.
+    layout_checked = len(clusters) >= 3
+    layout_ok = True
+    if layout_checked and layout_min_size_cv is not None and layout_min_spacing_cv is not None:
+        layout_ok = not (size_cv < layout_min_size_cv and spacing_cv < layout_min_spacing_cv)
+    report["layout"] = {
+        "size_cv": round(size_cv, 4),
+        "spacing_cv": round(spacing_cv, 4),
+        "quadrant_occupancy": quadrant_occupancy,
+        "mirror_score": _mirror_score(centroids),
+        "minimum_size_cv": layout_min_size_cv,
+        "minimum_spacing_cv": layout_min_spacing_cv,
+        "checked": layout_checked,
+        "ok": layout_ok,
+    }
+    if not layout_ok:
+        reasons.append(
+            "accent layout regularity: %d deposits with size spread %.2f and spacing spread %.2f "
+            "(both below %.2f) read as a stamped pattern; vary the deposit sizes and the gaps"
+            % (len(clusters), size_cv, spacing_cv, layout_min_size_cv or 0.0)
+        )
+
+    # -- ramp use: does a large deposit actually spend its ramp? -------------
+    # Only the worst offender per rule is quoted: the same mistake made by four
+    # deposits is one fault, and a report that repeats it four times is harder
+    # to read than the fault is to fix.
+    levels_used: list[int] = []
+    dominant_shares: list[float] = []
+    monotone_shares: list[float] = []
+    ramp_ok = True
+    worst_levels: tuple[int, int] | None = None       # (levels, cluster size)
+    worst_dominant: tuple[float, int] | None = None   # (share, cluster size)
+    worst_monotone: tuple[float, int] | None = None   # (share, cluster size)
+    for cluster in clusters:
+        if ramp_min_pixels is not None and len(cluster) < ramp_min_pixels:
+            continue
+        bins = Counter(int(luma(pixels[point]) // ramp_level_step) for point in cluster)
+        levels = len(bins)
+        dominant = bins.most_common(1)[0][1] / float(len(cluster))
+        monotone = _ramp_monotone_share(cluster, pixels)
+        levels_used.append(levels)
+        dominant_shares.append(round(dominant, 4))
+        monotone_shares.append(monotone)
+        if worst_levels is None or levels < worst_levels[0]:
+            worst_levels = (levels, len(cluster))
+        if worst_dominant is None or dominant > worst_dominant[0]:
+            worst_dominant = (dominant, len(cluster))
+        if worst_monotone is None or monotone < worst_monotone[0]:
+            worst_monotone = (monotone, len(cluster))
+    if ramp_min_levels is not None and worst_levels and worst_levels[0] < ramp_min_levels:
+        ramp_ok = False
+        reasons.append(
+            "accent ramp use: a %d-pixel deposit uses only %d value level(s) of the declared %d; "
+            "give each deposit a light core and a darker rim"
+            % (worst_levels[1], worst_levels[0], ramp_min_levels)
+        )
+    if (
+        ramp_max_dominant_share is not None
+        and worst_dominant
+        and worst_dominant[0] > ramp_max_dominant_share
+    ):
+        ramp_ok = False
+        reasons.append(
+            "accent ramp use: %.0f%% of a %d-pixel deposit sits in one value level (limit %.0f%%); "
+            "the ramp was declared but the deposit is mostly a single flat shade"
+            % (worst_dominant[0] * 100.0, worst_dominant[1], ramp_max_dominant_share * 100.0)
+        )
+    if ramp_min_monotone is not None and worst_monotone and worst_monotone[0] < ramp_min_monotone:
+        ramp_ok = False
+        reasons.append(
+            "accent ramp use: only %.0f%% of value steps inside a %d-pixel deposit run the same way "
+            "(limit %.0f%%); the shades are sprinkled rather than shaded"
+            % (worst_monotone[0] * 100.0, worst_monotone[1], ramp_min_monotone * 100.0)
+        )
+    report["ramp"] = {
+        "checked_clusters": len(levels_used),
+        "levels_used": levels_used,
+        "dominant_shares": dominant_shares,
+        "monotone_shares": monotone_shares,
+        "minimum_pixels": ramp_min_pixels,
+        "minimum_levels": ramp_min_levels,
+        "maximum_dominant_share": ramp_max_dominant_share,
+        "minimum_monotone": ramp_min_monotone,
+        "ok": ramp_ok,
+    }
+    report["ok"] = bool(motif_ok and layout_ok and ramp_ok)
+    return report, reasons
+
+
 def accent_audit(
     image: "Image.Image | str | Path",
     *,
@@ -438,16 +730,30 @@ def accent_audit(
     minimum_cluster: int = 1,
     edge_max: float | None = None,
     accent_tolerance: int = 48,
+    motif_repeat_max: int | None = 2,
+    layout_min_size_cv: float | None = 0.15,
+    layout_min_spacing_cv: float | None = 0.15,
+    ramp_min_pixels: int | None = 6,
+    ramp_min_levels: int | None = 3,
+    ramp_max_dominant_share: float | None = 0.6,
+    ramp_min_monotone: float | None = 0.6,
 ) -> dict[str, Any]:
     """Count the accent pixels a sprite spent, and check every declared budget.
 
-    Three independent questions, because they fail differently:
+    Six independent questions, in two families, because they fail differently.
+
+    Violation gates -- did a limit get broken?
 
     * ``budget`` -- how many accent pixels did the sprite use? A plain block
       declares 0 and must come out at 0.
     * ``minimum_cluster`` -- is any accent a lone speck rather than a deposit?
     * ``edge_max`` -- how hard is the step from an accent pixel to the base
       material next to it? This is the number behind "橙色和蓝色的边缘要拖突兀有多突兀".
+
+    Structure gates -- does it read as drawn rather than stamped? See
+    :func:`accent_structure_report`; ``motif_repeat_max``, the two layout spreads
+    and the three ramp thresholds are passed straight through. A sprite can pass
+    every violation gate and still be the thing a person rejects.
     """
     loaded = _load(image)
     pixels = _opaque_map(loaded)
@@ -457,6 +763,17 @@ def accent_audit(
         base_colors=base_colors,
         palette=palette,
         accent_tolerance=accent_tolerance,
+    )
+    structure, structure_reasons = accent_structure_report(
+        points,
+        pixels,
+        motif_repeat_max=motif_repeat_max,
+        layout_min_size_cv=layout_min_size_cv,
+        layout_min_spacing_cv=layout_min_spacing_cv,
+        ramp_min_pixels=ramp_min_pixels,
+        ramp_min_levels=ramp_min_levels,
+        ramp_max_dominant_share=ramp_max_dominant_share,
+        ramp_min_monotone=ramp_min_monotone,
     )
     groups = components(points)
     sizes = sorted((len(group) for group in groups), reverse=True)
@@ -528,8 +845,12 @@ def accent_audit(
     report["clusters_ok"] = sum(undersized) == 0
     report["edge_ok"] = edge_max is None or (report["edge_delta_p90"] or 0.0) <= edge_max
     report["budget"] = budget
+    report["structure"] = structure
     report["consistent"] = bool(
-        report["within_budget"] and report["clusters_ok"] and report["edge_ok"]
+        report["within_budget"]
+        and report["clusters_ok"]
+        and report["edge_ok"]
+        and structure["ok"]
     )
     reasons: list[str] = []
     if not report["within_budget"]:
@@ -546,6 +867,7 @@ def accent_audit(
             "accent-to-base step p90 %.0f exceeds the declared maximum of %.0f"
             % (report["edge_delta_p90"] or 0.0, edge_max or 0.0)
         )
+    reasons.extend(structure_reasons)
     report["reasons"] = reasons
     return report
 

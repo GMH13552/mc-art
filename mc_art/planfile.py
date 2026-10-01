@@ -465,7 +465,34 @@ def plan_from_dict(data: dict[str, Any]) -> GenerationPlan:
         geometry=geometry_from_dict(data["geometry"]),
         appearance=appearance_from_dict(data["appearance"]),
         references=[reference_from_dict(item) for item in data.get("references", [])],
+        available_references=[
+            reference_from_dict(item) for item in data.get("available_references", [])
+        ],
     )
+
+
+def reference_pool(directory: str | Path) -> list[ReferenceAsset]:
+    """Every loose texture in a reference directory, as pool evidence.
+
+    This is the list the engine compares a plan's ``references`` against: what was
+    sitting on the reference root, whether or not the plan attached it. Names come
+    from the file stem, which is how a reference root is organised in practice.
+    The renderer never samples from here -- it is evidence about a decision, not
+    an input to the raster.
+    """
+    root = Path(directory).expanduser()
+    if not root.is_dir():
+        raise FileNotFoundError("reference pool directory not found: %s" % root)
+    return [
+        ReferenceAsset(
+            path=str(path.resolve()),
+            name=path.stem,
+            roles=[ReferenceRole.MATERIAL, ReferenceRole.PIXEL_STYLE],
+            notes=["pool=available on the reference root; not necessarily attached"],
+            features={},
+        )
+        for path in sorted(root.glob("*.png"))
+    ]
 
 
 def plan_from_file(path: str | Path) -> GenerationPlan:

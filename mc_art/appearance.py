@@ -1054,6 +1054,17 @@ def _overlay_reference_is_salient(
         # should remain underneath the overlay.
         (source_chroma >= 60.0 and chroma_gap >= 40.0)
         or (source_chroma >= 48.0 and chroma_gap >= 36.0 and luma_gap >= 40.0)
+        # A muted ore is the case the two clauses above miss. Vanilla iron_ore's
+        # specks are tan: chroma 51-72 against grey stone, so a chroma gap of
+        # 31-49, but almost no brightness gap at all -- #887455 is luma 118
+        # against a stone dominant of about 120. Requiring a luma jump as well
+        # dropped every stop but the brightest, and the overlaid flecks arrived
+        # as half a deposit with no dark rim: measured, 14 pixels kept of the
+        # source's 55, in 3 clusters instead of 9. A compact cluster that is
+        # clearly more chromatic than its own dominant is a deposit whether or
+        # not it is also brighter; the size guard above still refuses a broad
+        # band, which is what keeps a material from being overlaid wholesale.
+        or (source_chroma >= 40.0 and chroma_gap >= 28.0)
         or (luma_gap >= 64.0 and (source_count <= max(4, region_count * 0.35) if region_count else True))
     )
 

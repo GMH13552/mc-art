@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw
 
 from mc_art.appearance import _select_reference, reference_selection_report
 from mc_art.contracts import ReferenceAsset, ReferenceRole
+from mc_art.validation import validate_reference_pool
 
 
 def _shape(path: Path, boxes: list[list[int]], colour=(90, 70, 45, 255)) -> Path:
@@ -147,3 +148,57 @@ def test_a_smaller_face_strip_is_eligible_and_reported_as_face_tile(tmp_path: Pa
     report = reference_selection_report([reference], 64, 16, target_mask=mask)
     assert report["chosen"]["mode"] == "face_tile"
     assert report["chosen"]["name"] == "planks"
+
+
+# -- the pool: a same-class reference that was available and unused ---------
+#
+# "this doesn't reference iron ore at all" was true, and the engine already had
+# the evidence: iron_ore.png was on the reference root while the plan attached
+# only stone. Nothing compared the two, so the asset shipped. These pin the
+# comparison.
+
+POOL = ["stone", "deepslate", "iron_ore", "raw_iron", "iron_ingot"]
+
+
+def test_an_ore_that_did_not_attach_the_ore_reference_is_reported() -> None:
+    result = validate_reference_pool(["stone"], POOL, asset="example_ore")
+    assert result.passed is False
+    assert result.metrics["unused_same_class"] == 1
+    assert result.metrics["unused_names"] == "iron_ore"
+    assert "REFERENCE AVAILABLE BUT UNUSED" in result.errors[0]
+    assert "iron_ore" in result.errors[0]
+
+
+def test_a_plan_that_attached_nothing_is_reported_against_the_whole_pool() -> None:
+    result = validate_reference_pool([], POOL, asset="example_raw_ore")
+    assert result.passed is False
+    assert "attached nothing" in result.errors[0]
+
+
+def test_attaching_the_better_match_silences_it() -> None:
+    """The raw ore that DID attach raw_iron is not also told off about iron_ore.
+
+    Both share one content word with the asset name, so the scores tie and the
+    rule does not fire -- the choice between two equal candidates is the
+    caller's, and the gate must not pretend otherwise.
+    """
+    result = validate_reference_pool(["raw_iron"], POOL, asset="example_raw_ore")
+    assert result.passed is True, result.errors
+    assert result.metrics["unused_same_class"] == 0
+
+
+def test_a_stated_reason_passes_and_still_reports_the_finding() -> None:
+    result = validate_reference_pool(
+        ["stone"], POOL, asset="example_ore", waiver="this ore's flecks are hand-placed on purpose"
+    )
+    assert result.passed is True
+    assert any("REFERENCE AVAILABLE BUT UNUSED" in warning for warning in result.warnings)
+    assert any("reference_waiver" in warning for warning in result.warnings)
+
+
+def test_an_unsupplied_pool_reports_unchecked_rather_than_clean() -> None:
+    """A green run must not imply a check that never ran."""
+    result = validate_reference_pool(["stone"], [], asset="example_ore")
+    assert result.passed is True
+    assert result.metrics["checked"] is False
+    assert "was NOT checked" in result.warnings[0]

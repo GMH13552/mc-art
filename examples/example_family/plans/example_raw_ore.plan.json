@@ -1,12 +1,12 @@
 {
   "request": {
-    "query": "example raw ore: a rough lump of the same rock, smooth-shaded, with two deposits",
+    "query": "example raw ore: a rough lump of the family's rock, vanilla raw_iron's contour, two deposits",
     "form": "item",
     "name": "example_raw_ore",
     "namespace": "examplepack",
     "width": 16,
     "height": 16,
-    "novelty": 0.4,
+    "novelty": 0.2,
     "target_path": null,
     "shape_policy": "planned",
     "seed": 13,
@@ -14,12 +14,12 @@
   },
   "descriptor": {
     "target": "example raw ore item",
-    "semantic": "A 16x16 item sprite: a rough lump of the family's rock with two star-metal deposits. The body is shaded as one continuous ramp rather than flat swatches, because a lump is a rounded solid, not a patterned surface.",
+    "semantic": "A 16x16 item sprite: a rough lump of the family's rock in vanilla raw_iron's own contour, with two star-metal deposits.",
     "visual_identity": [
       "16x16 transparent-background item sprite",
-      "rough compact lump, lit from the upper left",
-      "a continuous value ramp across the body, not equal-value blocks",
-      "two deposits with an internal light core and dark rim"
+      "contour identical to vanilla raw_iron -- only the colour and the deposits are ours",
+      "cold blue-grey rock, carrying raw_iron's own 3D shading as brightness",
+      "two deposits of different size and shape, each with a light core and a dark rim"
     ],
     "parts": [
       {
@@ -34,9 +34,9 @@
       }
     ],
     "negative_identities": ["ingot", "bar", "gem", "tool"],
-    "orientation": "centered, lit from the upper left",
-    "reference_strategy": "No reference: this is a new contour. The body is one authored ramp sampled continuously along the upper-left diagonal, so the lump reads as a rounded solid; the deposits are the only saturated pixels and are declared as the accent with a budget and a minimum cluster size.",
-    "shape_edit_mode": "new_silhouette",
+    "orientation": "centered, same three-quarter massing as vanilla raw_iron",
+    "reference_strategy": "appearance_only against vanilla raw_iron: this object already exists in the game, so its shape is the authority and only the material is ours. Sampling takes the source's brightness (value), so raw_iron's own lit face and shadowed underside survive the recolour; the two deposits are declared accents with a budget, a minimum cluster size and a required value ramp.",
+    "shape_edit_mode": "appearance_only",
     "reference_part_map": null,
     "target_part_map": null
   },
@@ -64,22 +64,22 @@
           "offset": [0, 0],
           "marker": "X",
           "rows": [
-            "................",
-            ".....XXXX.......",
-            "...XXXXXXX......",
-            "..XXXXXXXXXX....",
-            ".XXXXXXXXXXXX...",
-            ".XXXXXXXXXXXXX..",
-            "XXXXXXXXXXXXXX..",
-            "XXXXXXXXXXXXXXX.",
-            "XXXXXXXXXXXXXXX.",
-            ".XXXXXXXXXXXXXX.",
-            "..XXXXXXXXXXXX..",
-            "...XXXXXXXXXX...",
-            "....XXXXXXXX....",
-            ".....XXXXXX.....",
-            "......XXXX......",
-            "................"
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX"
           ]
         },
         "layer": 0
@@ -116,17 +116,21 @@
     "outline_color": null,
     "outline_width": 0,
     "transparent_background": true,
-    "reference_sampling": "none",
+    "reference_sampling": "value",
     "region_rules": [],
-    "part_reference_sampling": {},
-    "part_reference_sources": {},
+    "part_reference_sampling": {
+      "lump": "value"
+    },
+    "part_reference_sources": {
+      "lump": "raw_iron"
+    },
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_colors": ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"],
-    "accent_budget": 20,
+    "accent_budget": 27,
     "accent_min_cluster": 3,
     "accent_cleanup": true,
-    "accent_edge_max": 60,
+    "accent_edge_max": 90,
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30,
     "pixel_map": {
@@ -140,15 +144,15 @@
         "................",
         "................",
         "................",
+        "......23........",
+        ".....2344.......",
+        "......344.......",
         "................",
-        ".....44.........",
-        "....4234........",
-        ".....44.........",
         "................",
-        "..........44....",
-        ".........4234...",
-        "..........44....",
-        "................",
+        "...........23...",
+        "..........2344..",
+        ".........23444..",
+        "..........344...",
         "................",
         "................",
         "................",
@@ -156,5 +160,16 @@
       ]
     }
   },
-  "references": []
+  "references": [
+    {
+      "path": "../refs/raw_iron.png",
+      "name": "raw_iron",
+      "roles": ["shape", "material", "pixel_style"],
+      "notes": [
+        "group=minecraft:item/raw_iron",
+        "shape authority for this request: raw ore already exists in the game, so its contour and its lit/shadowed massing are the authority and only the material is ours",
+        "sampled with value (brightness only) so raw_iron's own 3D shading survives while the rock becomes the family's"
+      ]
+    }
+  ]
 }

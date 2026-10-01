@@ -1,8 +1,15 @@
-"""Tests for the art-quality gates: value bands, accent budget, family axes.
+"""Tests for the art-quality gates: bands, accents, structure, family axes.
 
 Each gate is proved twice on purpose. A check that only ever passes is not a
 check, so every test here builds the good input and the faulted input and
 asserts the verdict flips between them.
+
+The structural gates -- motif repeat, layout regularity, ramp use -- exist
+because the violation gates could not see the delivery a user rejected: four
+identical 8-pixel stamps on a grid breach no budget, no minimum cluster size and
+no edge limit. Those three fixtures are kept here as well as in the example's
+fault demo, because "the gate fires on the real fault" is the property that
+matters.
 """
 
 from __future__ import annotations
@@ -74,6 +81,10 @@ def _block_plan(tmp_path: Path, appearance: AppearanceSpec) -> GenerationPlan:
             semantic="a 16x16 block face",
             visual_identity=["16x16 opaque block face"],
             parts=[part],
+            # A flat block face is a paint job with no contour to take from a
+            # source, which is exactly what the reference gate permits without a
+            # waiver. Tests that want the gate to bite pass their own descriptor.
+            shape_edit_mode="appearance_only",
         ),
         geometry=GeometrySpec(
             width=16,
@@ -395,3 +406,156 @@ def test_band_report_scales_beyond_a_single_block(tmp_path: Path, width: int, he
     assert report["band_count"] == 1
     assert report["largest_flat_share"] == 1.0
     assert report["isolated_pixels"] == 0
+
+
+# -- structural gates: does it read as drawn, or stamped? --------------------
+
+STONE_BASE = (60, 66, 78, 255)
+RAMP = {"1": (255, 227, 176), "2": (240, 190, 110), "3": (207, 148, 64), "4": (142, 92, 28)}
+
+# The delivery the user rejected, kept verbatim: one 8-pixel stamp, four times,
+# once per quadrant at the same spacing.
+REJECTED_ORE_ROWS = [
+    "................", "...44...........", "..4234....44....", "...44....4234...",
+    "..........44....", "................", "................", "....44..........",
+    "...4234.........", "....44..........", "..........44....", ".........4234...",
+    "..........44....", "................", "................", "................",
+]
+
+# The rejected ingot: 16 accent pixels, 12 of them the darkest amber.
+REJECTED_INGOT_ROWS = [
+    "................", "................", "................", "................",
+    "......444.......", ".....42324......", "....44444.......", ".....444........",
+    "................", "................", "................", "................",
+    "................", "................", "................", "................",
+]
+
+
+def _paint(path: Path, rows: list[str], legend: dict[str, tuple[int, int, int]]) -> Path:
+    image = Image.new("RGBA", (16, 16), STONE_BASE)
+    for y, row in enumerate(rows):
+        for x, symbol in enumerate(row):
+            if symbol != ".":
+                image.putpixel((x, y), legend[symbol] + (255,))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path)
+    return path
+
+
+def test_the_motif_gate_fires_on_the_rejected_ore_and_not_on_four_different_shapes(tmp_path: Path) -> None:
+    rejected = _paint(tmp_path / "rejected.png", REJECTED_ORE_ROWS, RAMP)
+    audit = style.accent_audit(rejected, accent_colors=["#F0BE6E", "#8E5C1C"], budget=36)
+    assert audit["structure"]["motif"]["repeat_max"] == 4
+    assert audit["structure"]["motif"]["ok"] is False
+    assert any("motif repeat" in reason for reason in audit["reasons"])
+
+    # Four deposits of the same size class but four different outlines, at
+    # irregular spacing: the gate that should stay quiet here.
+    varied = [
+        "................",
+        "...234..........",
+        "..2344..........",
+        "...344..........",
+        "................",
+        ".........233....",
+        "........2334....",
+        ".......23344....",
+        "........344.....",
+        "................",
+        "...2334.........",
+        "....344.........",
+        "................",
+        "..........234...",
+        "..........344...",
+        "................",
+    ]
+    good = _paint(tmp_path / "varied.png", varied, RAMP)
+    good_audit = style.accent_audit(good, accent_colors=["#F0BE6E", "#8E5C1C"], budget=42)
+    assert good_audit["structure"]["motif"]["repeat_max"] <= 2, good_audit["structure"]["motif"]
+    assert good_audit["structure"]["motif"]["ok"] is True
+    assert good_audit["consistent"] is True, good_audit["reasons"]
+
+
+def test_the_layout_gate_catches_an_even_grid_of_four_different_motifs(tmp_path: Path) -> None:
+    """The layout gate must not be the motif gate wearing a hat.
+
+    Four *different* stamps, so motif repeat passes; same size and same spacing,
+    so the layout gate is the only one that can catch it.
+    """
+    rows = [list("." * 16) for _ in range(16)]
+    stamps = (
+        ((2, 2), ((1, 0, "2"), (0, 1, "2"), (1, 1, "3"), (2, 1, "4"), (1, 2, "3"))),
+        ((9, 2), ((0, 0, "2"), (1, 0, "3"), (1, 1, "2"), (1, 2, "3"), (2, 2, "4"))),
+        ((2, 9), ((2, 0, "2"), (1, 1, "2"), (0, 2, "3"), (1, 2, "3"), (2, 2, "4"))),
+        ((9, 9), ((0, 0, "3"), (2, 0, "4"), (1, 1, "2"), (0, 2, "3"), (2, 2, "3"))),
+    )
+    for (left, top), pixels in stamps:
+        for dx, dy, level in pixels:
+            rows[top + dy][left + dx] = level
+    grid = _paint(tmp_path / "grid.png", ["".join(r) for r in rows], RAMP)
+    audit = style.accent_audit(grid, accent_colors=["#F0BE6E", "#8E5C1C"], budget=48)
+    assert audit["structure"]["motif"]["ok"] is True, "the shapes really do differ"
+    assert audit["structure"]["layout"]["ok"] is False
+    assert audit["structure"]["layout"]["size_cv"] < 0.15
+    assert audit["structure"]["layout"]["spacing_cv"] < 0.15
+    assert any("layout regularity" in reason for reason in audit["reasons"])
+
+
+def test_the_ramp_gate_fires_on_the_rejected_ingot_and_passes_a_cored_sheen(tmp_path: Path) -> None:
+    rejected = _paint(tmp_path / "block.png", REJECTED_INGOT_ROWS, RAMP)
+    audit = style.accent_audit(rejected, accent_colors=["#F0BE6E", "#8E5C1C"], budget=20)
+    ramp = audit["structure"]["ramp"]
+    assert ramp["ok"] is False
+    assert ramp["dominant_shares"][0] > 0.6
+    assert any("ramp use" in reason for reason in audit["reasons"])
+
+    # The shipped sheen: brightest in the middle, falling off through every stop.
+    sheen = [
+        "................", "................", "................", "................",
+        ".....43334......", "....4321234.....", ".....43334......", "................",
+        "................", "................", "................", "................",
+        "................", "................", "................", "................",
+    ]
+    good = _paint(tmp_path / "sheen.png", sheen, RAMP)
+    good_audit = style.accent_audit(good, accent_colors=["#F0BE6E", "#8E5C1C"], budget=20)
+    assert good_audit["structure"]["ramp"]["ok"] is True, good_audit["structure"]["ramp"]
+    assert min(good_audit["structure"]["ramp"]["levels_used"]) >= 3
+    assert max(good_audit["structure"]["ramp"]["dominant_shares"]) <= 0.6
+    assert min(good_audit["structure"]["ramp"]["monotone_shares"]) >= 0.6
+
+
+def test_a_flat_single_shade_deposit_is_caught_even_though_it_is_one_cluster(tmp_path: Path) -> None:
+    rows = ["................", "................", "......4444......", "......4444......",
+            "......4444......", "................", "................", "................",
+            "................", "................", "................", "................",
+            "................", "................", "................", "................"]
+    flat = _paint(tmp_path / "flat.png", rows, RAMP)
+    audit = style.accent_audit(flat, accent_colors=["#8E5C1C"], budget=12)
+    assert audit["structure"]["ramp"]["ok"] is False
+    assert audit["structure"]["ramp"]["levels_used"] == [1]
+
+
+def test_the_structure_gates_reach_the_render_stage(tmp_path: Path) -> None:
+    """Not just the metric: the plan's own render must fail on the rejected art."""
+    plan = _block_plan(
+        tmp_path,
+        AppearanceSpec(
+            palette={"base": "#3C424E", "star2": "#F0BE6E", "star3": "#CF9440", "star4": "#8E5C1C"},
+            parts={"face": PartAppearance(colors=["base"], material="stone", shade_axis="none")},
+            accent_colors=["#F0BE6E", "#8E5C1C"],
+            accent_budget=36,
+            accent_min_cluster=3,
+            accent_edge_max=90,
+            pixel_map={
+                "legend": {"2": "star2", "3": "star3", "4": "star4"},
+                "rows": REJECTED_ORE_ROWS,
+            },
+        ),
+    )
+    result = GenerationPipeline(critic=None, max_geometry_repairs=0).run(
+        plan, tmp_path / "rejected", package=False
+    )
+    assert result.validation.passed is False
+    assert result.validation.metrics["style.accent_motif_ok"] is False
+    assert result.validation.metrics["style.accent_structure_ok"] is False
+    assert any("motif repeat" in error for error in result.validation.errors)

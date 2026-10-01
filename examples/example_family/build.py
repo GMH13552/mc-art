@@ -23,6 +23,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from dataclasses import replace
+
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).resolve().parent
@@ -32,21 +34,39 @@ if str(REPO) not in sys.path:
 
 from mc_art.asset_groups import build_catalogue  # noqa: E402
 from mc_art.pipeline import GenerationPipeline  # noqa: E402
-from mc_art.planfile import plan_from_file  # noqa: E402
+from mc_art.planfile import plan_from_file, reference_pool  # noqa: E402
 from mc_art.style import accent_audit, band_report, family_axes, family_axes_summary  # noqa: E402
 
 # The vanilla art this family is allowed to learn from. Every entry is a
 # vanilla group; nothing here comes from a mod.
+#
+# `raw_iron` is in here because the raw lump has a vanilla counterpart. Its
+# absence was the user's first complaint about the first delivery -- "the raw one
+# doesn't reference raw iron at all" -- and they were right: a shape was invented
+# for an object the game already draws. Every member of this family now has a
+# vanilla authority for its shape.
 REFERENCE_GROUPS = {
     "stone": "minecraft:block/stone",
     "deepslate": "minecraft:block/deepslate",
     "iron_ore": "minecraft:block/iron_ore",
     "iron_ingot": "minecraft:item/iron_ingot",
+    "raw_iron": "minecraft:item/raw_iron",
 }
 
 # Reference row for the sheet, then the generated family, in family order.
-REFERENCE_ROW = ("stone", "deepslate", "iron_ore", "iron_ingot")
+REFERENCE_ROW = ("stone", "deepslate", "iron_ore", "iron_ingot", "raw_iron")
 FAMILY = ("example_stone", "example_deepslate", "example_ore", "example_raw_ore", "example_ingot")
+
+# Which vanilla texture each member takes its *shape* from. Printing and
+# asserting this is what keeps "does it reference something?" from becoming a
+# silent property of a JSON field nobody reads.
+SHAPE_AUTHORITY = {
+    "example_stone": "stone",
+    "example_deepslate": "deepslate",
+    "example_ore": "stone",
+    "example_raw_ore": "raw_iron",
+    "example_ingot": "iron_ingot",
+}
 
 # The family's one accent hue. Every member that carries an accent carries this
 # one, which is what makes the ore, the raw lump and the ingot read as the same
@@ -84,6 +104,10 @@ def render_family(out: Path) -> tuple[dict[str, dict], list[str]]:
     for name in FAMILY:
         plan_path = HERE / "plans" / (name + ".plan.json")
         plan = plan_from_file(plan_path)
+        # Everything the reference root holds, attached or not. The renderer
+        # never samples from the pool; it is there so "iron_ore.png was on disk
+        # and you did not attach it" is something the engine can say.
+        plan = replace(plan, available_references=reference_pool(HERE / "refs"))
         run = GenerationPipeline(critic=None, repairer=None, max_geometry_repairs=0).run(
             plan, out / name, package=False
         )
@@ -96,8 +120,8 @@ def render_family(out: Path) -> tuple[dict[str, dict], list[str]]:
         # gate: it shows the source, the delivered sprite and the pixels that
         # changed between them, which is how "the contour was kept and only the
         # colour moved" can be seen rather than asserted. A member with no
-        # reference (the new-silhouette lump) has nothing to compare against and
-        # correctly produces no file.
+        # reference has nothing to compare against and correctly produces no
+        # file -- and this family now has no such member.
         comparison = None
         if run.sprite_path is not None and plan.references:
             try:
@@ -106,14 +130,41 @@ def render_family(out: Path) -> tuple[dict[str, dict], list[str]]:
                 )
             except (OSError, ValueError, KeyError):
                 comparison = None
+        selection_path = out / name / "reference_selection.json"
+        selection: dict = {}
+        if selection_path.exists():
+            try:
+                selection = json.loads(selection_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                selection = {}
+        pool_report_path = out / name / "validation_reference_pool.json"
+        unused_same_class: list[str] = []
+        if pool_report_path.exists():
+            try:
+                pool_metrics = json.loads(
+                    pool_report_path.read_text(encoding="utf-8")
+                ).get("metrics", {})
+                unused_same_class = [
+                    item for item in str(pool_metrics.get("unused_names", "")).split(",") if item
+                ]
+            except (OSError, ValueError):
+                unused_same_class = []
         results[name] = {
             "plan": str(plan_path),
             "out": str(out / name),
+            "selection": selection,
+            "attached": [reference.name for reference in plan.references],
+            "attached_paths": {
+                reference.name: reference.path for reference in plan.references
+            },
+            "unused_same_class": unused_same_class,
             "sprite": str(run.sprite_path) if run.sprite_path else None,
             "validation_passed": bool(run.validation.passed),
             "comparison": bool(comparison),
             "declared_accent_budget": plan.appearance.accent_budget,
             "declared_min_cluster": plan.appearance.accent_min_cluster,
+            "declared_accent_colors": list(plan.appearance.accent_colors),
+            "structure": run.validation.metrics.get("style.accent_structure_ok"),
             "declared_base_colors": [
                 plan.appearance.palette.get(token, token)
                 for style in plan.appearance.parts.values()
@@ -124,47 +175,105 @@ def render_family(out: Path) -> tuple[dict[str, dict], list[str]]:
 
 
 def measure(results: dict[str, dict]) -> dict:
-    """Re-measure the delivered PNGs, not the intentions behind them."""
+    """Re-measure the delivered PNGs, not the intentions behind them.
+
+    Each member is audited with *its own* declared accent swatches. The ore's
+    accent is vanilla iron_ore's tan, because the specks are iron_ore's own
+    pixels, so auditing it against the family's amber would count almost nothing
+    and then complain about the structure of what it did not count.
+    """
     sprites = [results[name]["sprite"] for name in FAMILY if results[name]["sprite"]]
+    family_accents: list[str] = []
     for name in FAMILY:
         row = results[name]
+        for colour in row.get("declared_accent_colors") or []:
+            if colour not in family_accents:
+                family_accents.append(colour)
         if not row["sprite"]:
             continue
         row["bands"] = band_report(row["sprite"])
         row["accent"] = accent_audit(
             row["sprite"],
-            accent_colors=ACCENT_SWATCHES,
+            accent_colors=row.get("declared_accent_colors") or ACCENT_SWATCHES,
             base_colors=row["declared_base_colors"],
             budget=row["declared_accent_budget"],
             minimum_cluster=row["declared_min_cluster"],
         )
     return family_axes(
         sprites,
-        accent_colors=ACCENT_SWATCHES,
+        accent_colors=family_accents or ACCENT_SWATCHES,
         base_colors=results["example_stone"]["declared_base_colors"],
     )
 
 
 def contact_sheet(results: dict[str, dict], path: Path, scale: int = 10) -> Path:
-    """One image: the vanilla sources beside the family they produced."""
+    """Sources, then the family they produced -- with the source column honest.
+
+    The first version of this sheet put every reference the script had extracted
+    into one "VANILLA SOURCE" block, next to products that had not used most of
+    them. It read as "these were the references" when `iron_ore.png` and
+    `raw_iron.png` had never been attached to the plan at all; the Lead was
+    misled by it, and so was I. So the sheet now separates three things:
+
+    * **ATTACHED SOURCE** -- the references each member's plan actually attached,
+      one column per member, which is the only thing that can honestly sit next
+      to a product;
+    * **AVAILABLE, NOT USED** -- what was on the reference root and was not
+      attached, so the gap is visible instead of hidden;
+    * **GENERATED**.
+    """
     tile = 16 * scale
     gap = 10
     label_height = 16
     header_height = 22
-    reference_tiles = [HERE / "refs" / (name + ".png") for name in REFERENCE_ROW]
     family_tiles = [Path(results[name]["sprite"]) for name in FAMILY]
-    columns = len(reference_tiles) + len(family_tiles)
+
+    attached_columns: list[tuple[str, Path]] = []
+    for name in FAMILY:
+        # EVERY reference the plan attached, not just the globally-selected one:
+        # the ore's base comes from stone and its deposits from iron_ore, and a
+        # label naming only the winner would hide half of what was used.
+        for reference in results[name].get("attached") or []:
+            attached_columns.append((
+                "%s <- %s" % (name, reference),
+                Path(results[name]["attached_paths"][reference]),
+            ))
+    unused_rows: list[tuple[str, list[Path]]] = []
+    for name in FAMILY:
+        pool = {
+            pool_name: HERE / "refs" / (pool_name + ".png")
+            for pool_name in REFERENCE_ROW
+        }
+        unused = results[name].get("unused_same_class") or []
+        unused_rows.append((
+            name,
+            [pool[item] for item in unused if item in pool and pool[item].exists()],
+        ))
+    unused_columns = [
+        (name, image) for name, images in unused_rows for image in images
+    ]
+
+    columns = len(attached_columns) + len(unused_columns) + len(family_tiles)
     width = columns * tile + (columns + 1) * gap
     height = header_height + tile + label_height + gap
     sheet = Image.new("RGBA", (width, height), (24, 24, 28, 255))
     draw = ImageDraw.Draw(sheet)
     font = ImageFont.load_default()
-    draw.text((gap, 4), "VANILLA SOURCE", fill=(150, 150, 158, 255), font=font)
-    family_left = gap + (len(reference_tiles) + 1) * tile + len(reference_tiles) * gap
-    draw.text((family_left, 4), "GENERATED FAMILY (one hue axis, one accent hue)",
+    draw.text((gap, 4), "ATTACHED SOURCE (what each plan actually used)",
+              fill=(150, 200, 150, 255), font=font)
+    if unused_columns:
+        unused_left = gap + (len(attached_columns) + 1) * tile + len(attached_columns) * gap
+        draw.text((unused_left, 4), "AVAILABLE, NOT USED",
+                  fill=(240, 170, 170, 255), font=font)
+    family_left = (
+        gap + (len(attached_columns) + len(unused_columns) + 1) * tile
+        + (len(attached_columns) + len(unused_columns)) * gap
+    )
+    draw.text((family_left, 4), "GENERATED (one hue axis, one accent hue)",
               fill=(214, 190, 140, 255), font=font)
 
-    def place(index: int, image: Path, label: str, accent_label: str = "") -> None:
+    def place(index: int, image: Path, label: str, accent_label: str = "",
+              tint: tuple[int, int, int, int] = (230, 230, 230, 255)) -> None:
         left = gap + index * (tile + gap)
         with Image.open(image) as loaded:
             sprite = loaded.convert("RGBA")
@@ -178,18 +287,24 @@ def contact_sheet(results: dict[str, dict], path: Path, scale: int = 10) -> Path
                                       fill=(56, 56, 62, 255))
         backdrop.alpha_composite(sprite.resize((tile, tile), Image.Resampling.NEAREST))
         sheet.alpha_composite(backdrop, (left, header_height))
-        draw.text((left, header_height + tile + 2), label, fill=(230, 230, 230, 255), font=font)
+        draw.text((left, header_height + tile + 2), label, fill=tint, font=font)
         if accent_label:
             draw.text((left + len(label) * 6 + 6, header_height + tile + 2), accent_label,
                       fill=(214, 190, 140, 255), font=font)
 
-    for index, (name, image) in enumerate(zip(REFERENCE_ROW, reference_tiles)):
-        place(index, image, name)
+    index = 0
+    for name, image in attached_columns:
+        place(index, image, name, tint=(190, 230, 190, 255))
+        index += 1
+    for name, image in unused_columns:
+        place(index, image, "%s: %s UNUSED" % (name.replace("example_", ""), image.stem),
+              tint=(240, 180, 180, 255))
+        index += 1
     for offset, name in enumerate(FAMILY):
         row = results[name]
         accent = row.get("accent") or {}
         place(
-            len(reference_tiles) + offset,
+            index + offset,
             Path(row["sprite"]),
             name,
             "accent %s/%s" % (accent.get("accent_pixels"), accent.get("budget")),
@@ -285,6 +400,32 @@ def main(argv: list[str] | None = None) -> int:
     results, failures = render_family(out)
     family = measure(results)
 
+    # Every member must have taken its shape from a vanilla counterpart. The
+    # engine writes this fact on every run; printing and asserting it is what
+    # stops "does it reference something?" from being a property of a JSON field
+    # nobody reads -- which is exactly how the first delivery shipped a raw ore
+    # with no reference and nobody noticed until the user did.
+    print()
+    reference_problems: list[str] = []
+    for name in FAMILY:
+        row = results[name]
+        selection = row.get("selection") or {}
+        chosen = (selection.get("chosen") or {}).get("name")
+        wanted = SHAPE_AUTHORITY[name]
+        print("%-18s shape authority: %-11s (step=%s, offered=%s)"
+              % (name, chosen or "NONE", selection.get("step"),
+                 (selection.get("counts") or {}).get("offered")))
+        if chosen is None:
+            reference_problems.append(
+                "%s took no shape authority at all (step=%s): %s"
+                % (name, selection.get("step"), selection.get("step_detail"))
+            )
+        elif chosen != wanted:
+            reference_problems.append(
+                "%s took its shape from %r, not the declared authority %r"
+                % (name, chosen, wanted)
+            )
+
     print()
     for name in FAMILY:
         row = results[name]
@@ -329,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     print("INDEX  -> %s" % index_path)
 
     problems = list(failures)
+    problems.extend(reference_problems)
     problems.extend(
         "%s: %s" % (name, reason)
         for name in FAMILY
@@ -352,12 +494,19 @@ def main(argv: list[str] | None = None) -> int:
             if stone_sprite.getpixel((x, y)) != ore_sprite.getpixel((x, y))
         }
         accent_pixels = (results["example_ore"].get("accent") or {}).get("accent_pixels")
+        below_minimum = (results["example_ore"].get("accent") or {}).get(
+            "below_minimum_pixels", 0
+        )
         print()
         print("ORE BASE   %d pixel(s) differ from example_stone; the ore declared %s accent pixel(s)"
               % (len(differing), accent_pixels))
-        if len(differing) != accent_pixels:
+        # The deposits, and nothing else: a handful of slack covers the stray
+        # specks `accent_cleanup` repainted with the nearest base colour, which
+        # differ from the stone without being accent pixels any more.
+        if not (accent_pixels or 0) <= len(differing) <= (accent_pixels or 0) + 8:
             problems.append(
-                "example_ore's base drifted from example_stone: %d differing pixel(s) against %s accent pixel(s)"
+                "example_ore's base drifted from example_stone: %d differing pixel(s) against "
+                "%s accent pixel(s)"
                 % (len(differing), accent_pixels)
             )
 

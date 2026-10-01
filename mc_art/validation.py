@@ -418,6 +418,13 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         budget=getattr(appearance, "accent_budget", None),
         minimum_cluster=getattr(appearance, "accent_min_cluster", 1),
         edge_max=getattr(appearance, "accent_edge_max", None),
+        motif_repeat_max=getattr(appearance, "accent_motif_repeat_max", 2),
+        layout_min_size_cv=getattr(appearance, "accent_layout_min_size_cv", 0.15),
+        layout_min_spacing_cv=getattr(appearance, "accent_layout_min_spacing_cv", 0.15),
+        ramp_min_pixels=getattr(appearance, "accent_ramp_min_pixels", 6),
+        ramp_min_levels=getattr(appearance, "accent_ramp_min_levels", 3),
+        ramp_max_dominant_share=getattr(appearance, "accent_ramp_max_dominant_share", 0.6),
+        ramp_min_monotone=getattr(appearance, "accent_ramp_min_monotone", 0.6),
     )
     bands = band_report(
         rendered,
@@ -434,6 +441,27 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         "accent_below_minimum_pixels": int(audit["below_minimum_pixels"]),
         "accent_edge_delta_p90": -1.0 if audit["edge_delta_p90"] is None else float(audit["edge_delta_p90"]),
         "accent_within_budget": bool(audit["within_budget"]),
+        "accent_motif_repeat": int(audit["structure"]["motif"]["repeat_max"]),
+        "accent_motif_distinct": int(audit["structure"]["motif"]["distinct_shapes"]),
+        "accent_motif_ok": bool(audit["structure"]["motif"]["ok"]),
+        "accent_layout_size_cv": float(audit["structure"]["layout"]["size_cv"]),
+        "accent_layout_spacing_cv": float(audit["structure"]["layout"]["spacing_cv"]),
+        "accent_layout_quadrants": int(audit["structure"]["layout"]["quadrant_occupancy"]),
+        "accent_layout_ok": bool(audit["structure"]["layout"]["ok"]),
+        "accent_ramp_levels_min": (
+            min(audit["structure"]["ramp"]["levels_used"])
+            if audit["structure"]["ramp"]["levels_used"] else -1
+        ),
+        "accent_ramp_dominant_max": (
+            max(audit["structure"]["ramp"]["dominant_shares"])
+            if audit["structure"]["ramp"]["dominant_shares"] else -1.0
+        ),
+        "accent_ramp_monotone_min": (
+            min(audit["structure"]["ramp"]["monotone_shares"])
+            if audit["structure"]["ramp"]["monotone_shares"] else -1.0
+        ),
+        "accent_ramp_ok": bool(audit["structure"]["ramp"]["ok"]),
+        "accent_structure_ok": bool(audit["structure"]["ok"]),
         "band_count": int(bands["band_count"]),
         "band_isolated_pixels": int(bands["isolated_pixels"]),
         "band_isolated_share": float(bands["isolated_share"]),
@@ -452,6 +480,192 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         metrics=metrics,
         errors=errors,
         warnings=warnings,
+    )
+
+
+def validate_reference_contract(
+    selection: dict[str, object],
+    *,
+    shape_edit_mode: str,
+    waiver: str = "",
+    asset: str = "",
+) -> ValidationResult:
+    """Refuse to invent a contour in silence.
+
+    The engine already knew when a render had no reference at all -- it wrote
+    ``step: no-references-offered`` into ``reference_selection.json`` -- and then
+    drew the asset anyway, because nothing read that field. A user found the
+    result and said "the raw one doesn't reference raw iron at all", which was
+    correct and had been true the whole time.
+
+    So the fact is promoted to a warning always, and to an error whenever the
+    plan is not a plain recolour: an object with a vanilla counterpart must take
+    its shape from that counterpart, and a genuinely new contour must say why in
+    ``reference_waiver``.
+    """
+    chosen = selection.get("chosen") if isinstance(selection, dict) else None
+    step = str(selection.get("step", "unknown")) if isinstance(selection, dict) else "unknown"
+    counts = selection.get("counts") if isinstance(selection, dict) else None
+    offered = int(counts.get("offered", 0)) if isinstance(counts, dict) else 0
+    detail = str(selection.get("step_detail", "")) if isinstance(selection, dict) else ""
+    mode = str(shape_edit_mode or "").strip().lower()
+    reason = str(waiver or "").strip()
+
+    metrics: dict[str, float | int | str | bool] = {
+        "step": step,
+        "offered": offered,
+        "chosen": bool(chosen),
+        "shape_edit_mode": mode,
+        "waiver_present": bool(reason),
+    }
+    errors: list[str] = []
+    warnings: list[str] = []
+    if chosen:
+        return ValidationResult(passed=True, stage="reference", metrics=metrics)
+
+    headline = (
+        "NO REFERENCE USED (%s): this asset was coloured with no source to learn "
+        "from, so nothing about its shape came from anything." % step
+    )
+    warnings.append(headline if not detail else headline + " " + detail)
+    if mode == "appearance_only":
+        warnings.append(
+            "shape_edit_mode is appearance_only but nothing was offered to conform to; "
+            "the contour is therefore the authored mask, not a source's"
+        )
+        return ValidationResult(
+            passed=True, stage="reference", metrics=metrics, warnings=warnings
+        )
+    if reason:
+        warnings.append("accepted because reference_waiver says: %s" % reason)
+        return ValidationResult(
+            passed=True, stage="reference", metrics=metrics, warnings=warnings
+        )
+    errors.append(
+        "no reference was offered and shape_edit_mode is %r, so this asset invents its "
+        "own contour with nothing to learn from. If the object exists in the game, use "
+        "its texture as the shape authority (appearance_only); if the contour really is "
+        "new, say why in descriptor.reference_waiver%s"
+        % (mode or "unset", " (%s)" % asset if asset else "")
+    )
+    return ValidationResult(
+        passed=False, stage="reference", metrics=metrics, errors=errors, warnings=warnings
+    )
+
+
+def _name_tokens(value: str) -> set[str]:
+    """Content words of an asset name, with the packaging noise removed."""
+    import re
+
+    generic = {"example", "generated", "demo", "block", "item", "texture", "tile"}
+    return {
+        token for token in re.split(r"[^a-z0-9]+", str(value).lower())
+        if token and token not in generic
+    }
+
+
+def validate_reference_pool(
+    attached: list[str],
+    available: list[str],
+    *,
+    asset: str,
+    waiver: str = "",
+) -> ValidationResult:
+    """Catch a same-class reference that was on disk and never attached.
+
+    The engine could already list what a reference root holds, and it already
+    recorded how many candidates a render was offered -- but nothing compared the
+    two. So a delivery shipped an ore whose specks were hand-written while
+    ``iron_ore.png`` sat in the same folder unused, and a raw ore with an empty
+    reference list while ``raw_iron.png`` sat beside it. The user's reading,
+    "this doesn't reference iron ore at all", was correct, and the evidence to
+    say so was already on disk.
+
+    The rule is deliberately narrow, because the engine must not pretend to know
+    what an asset is:
+
+    * every candidate in the pool is scored by how many content words its name
+      shares with the asset's name;
+    * the best **attached** score is the bar;
+    * a candidate that was **not** attached and scores **higher** than that bar
+      is a same-class reference that was available and unused -- an error unless
+      the caller states why.
+
+    An equal score does not fire, which is what keeps a raw ore that attached
+    ``raw_iron`` from also being told off about ``iron_ore``: both share one
+    content word, and the choice between them is the caller's.
+
+    A pool that was never supplied is reported as unchecked, not as clean, so a
+    green run never implies more than it checked.
+    """
+    asset_tokens = _name_tokens(asset)
+    metrics: dict[str, float | int | str | bool] = {
+        "attached": len(attached),
+        "available": len(available),
+        "asset_tokens": ",".join(sorted(asset_tokens)),
+    }
+    if not available:
+        return ValidationResult(
+            passed=True,
+            stage="reference_pool",
+            metrics={**metrics, "checked": False},
+            warnings=[
+                "no reference pool was supplied, so 'a same-class reference exists but was "
+                "not attached' was NOT checked (pass one to enable it)"
+            ],
+        )
+
+    def score(name: str) -> int:
+        return len(_name_tokens(name) & asset_tokens)
+
+    attached_scores = [score(name) for name in attached]
+    best_attached = max(attached_scores) if attached_scores else -1
+    attached_names = {str(name).lower() for name in attached}
+    unused = [
+        (name, score(name))
+        for name in available
+        if str(name).lower() not in attached_names and score(name) > best_attached
+    ]
+    metrics["best_attached_score"] = best_attached
+    metrics["unused_same_class"] = len(unused)
+    metrics["unused_names"] = ",".join(name for name, _value in sorted(unused))
+    metrics["checked"] = True
+    reason = str(waiver or "").strip()
+
+    if not unused:
+        return ValidationResult(passed=True, stage="reference_pool", metrics=metrics)
+
+    listed = ", ".join("%s (score %d)" % (name, value) for name, value in sorted(unused))
+    if attached:
+        headline = (
+            "REFERENCE AVAILABLE BUT UNUSED: %s %s on this reference root and matched this asset "
+            "better than anything the plan attached, but the plan did not attach %s"
+            % (listed, "is" if len(unused) == 1 else "are", "it" if len(unused) == 1 else "them")
+        )
+    else:
+        # Nothing was attached at all, so "better than" says nothing. Say the
+        # plain fact instead: same-class references were sitting right there.
+        headline = (
+            "REFERENCE AVAILABLE BUT UNUSED: the plan attached nothing, and %s %s on this "
+            "reference root and share a name with this asset"
+            % (listed, "is" if len(unused) == 1 else "are")
+        )
+    if reason:
+        return ValidationResult(
+            passed=True,
+            stage="reference_pool",
+            metrics=metrics,
+            warnings=[headline, "accepted because reference_waiver says: %s" % reason],
+        )
+    return ValidationResult(
+        passed=False,
+        stage="reference_pool",
+        metrics=metrics,
+        errors=[
+            headline + ". Attach it to the plan's references, or say why it does not apply "
+            "in descriptor.reference_waiver"
+        ],
+        warnings=["attached reference(s): %s" % (", ".join(attached) or "none")],
     )
 
 

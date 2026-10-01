@@ -178,6 +178,13 @@ class ShapeDescriptor:
     # on pixels that are transparent in the source.  It is still only
     # planning evidence: the geometry model owns the final contour.
     target_part_map: dict[str, Any] | None = None
+    # Why this asset invents its contour when nothing was offered to copy.
+    # A render with no usable reference and an edit mode other than
+    # ``appearance_only`` fails the reference gate unless this is filled in --
+    # "the object exists in the game and its shape is the authority" is not a
+    # decision the engine can make, but "there is nothing to copy, and here is
+    # why we are drawing it anyway" is one the caller has to state.
+    reference_waiver: str = ""
     # Attached by the orchestration layer after the reference-free director
     # pass. Geometry, appearance and review see the same immutable brief.
     art_direction: ArtDirection | None = None
@@ -401,6 +408,28 @@ class AppearanceSpec:
     # its value range and only a few pixels isolated from all four neighbours.
     band_maximum_isolated: float | None = None
     band_maximum_step: float | None = None
+    # Structure gates on the accent. Violation gates answer "did you break a
+    # rule"; these answer "does this read as drawn rather than stamped", and a
+    # sprite can pass every violation gate while still being the thing a person
+    # rejects -- four identical 8-pixel stamps on a grid breach no budget.
+    #
+    # ``accent_motif_repeat_max``: how many times one deposit *shape* (its
+    # binary outline, position and shade removed) may appear. Two is the default
+    # because a pair can be a deliberate echo; a set of four is a stamp.
+    # ``accent_layout_min_*_cv``: the spread required either in deposit sizes or
+    # in the gaps between them. Both below their minimum means every deposit is
+    # the same size and the same distance apart. Needs three or more deposits.
+    # ``accent_ramp_*``: a deposit of at least ``min_pixels`` must use
+    # ``min_levels`` value levels, must not spend more than
+    # ``max_dominant_share`` of itself on one level, and its value steps must
+    # mostly run one way.
+    accent_motif_repeat_max: int | None = 2
+    accent_layout_min_size_cv: float | None = 0.15
+    accent_layout_min_spacing_cv: float | None = 0.15
+    accent_ramp_min_pixels: int | None = 6
+    accent_ramp_min_levels: int | None = 3
+    accent_ramp_max_dominant_share: float | None = 0.6
+    accent_ramp_min_monotone: float | None = 0.6
 
     def __post_init__(self) -> None:
         if self.outline_width not in {0, 1}:
@@ -419,6 +448,20 @@ class AppearanceSpec:
             raise ValueError("band_maximum_isolated must be within 0..1, or null for unchecked")
         if self.band_maximum_step is not None and self.band_maximum_step < 0:
             raise ValueError("band_maximum_step must be zero or positive, or null for unchecked")
+        if self.accent_motif_repeat_max is not None and self.accent_motif_repeat_max < 1:
+            raise ValueError("accent_motif_repeat_max must be at least one, or null for unchecked")
+        for name in ("accent_layout_min_size_cv", "accent_layout_min_spacing_cv"):
+            value = getattr(self, name)
+            if value is not None and not 0.0 <= value <= 1.0:
+                raise ValueError("%s must be within 0..1, or null for unchecked" % name)
+        if self.accent_ramp_min_pixels is not None and self.accent_ramp_min_pixels < 1:
+            raise ValueError("accent_ramp_min_pixels must be at least one, or null for unchecked")
+        if self.accent_ramp_min_levels is not None and self.accent_ramp_min_levels < 1:
+            raise ValueError("accent_ramp_min_levels must be at least one, or null for unchecked")
+        if self.accent_ramp_max_dominant_share is not None and not 0.0 <= self.accent_ramp_max_dominant_share <= 1.0:
+            raise ValueError("accent_ramp_max_dominant_share must be within 0..1, or null for unchecked")
+        if self.accent_ramp_min_monotone is not None and not 0.0 <= self.accent_ramp_min_monotone <= 1.0:
+            raise ValueError("accent_ramp_min_monotone must be within 0..1, or null for unchecked")
         # A non-string mode must be reported as invalid data, never as a
         # TypeError from the membership test below.
         invalid_sampling = {

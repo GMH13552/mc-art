@@ -92,9 +92,9 @@ def test_the_plain_blocks_declare_an_accent_budget_of_zero_and_a_95_percent_valu
 
 def test_the_accented_members_declare_their_whole_accent_contract() -> None:
     expected = {
-        "example_ore": (36, 3),
-        "example_raw_ore": (20, 3),
-        "example_ingot": (16, 3),
+        "example_ore": (62, 3),
+        "example_raw_ore": (27, 3),
+        "example_ingot": (20, 3),
     }
     for name, (budget, minimum) in expected.items():
         data = json.loads((FAMILY / (name + ".plan.json")).read_text(encoding="utf-8"))

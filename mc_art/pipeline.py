@@ -45,6 +45,8 @@ from .validation import (
     StructuralCritic,
     aggregate_results,
     validate_geometry,
+    validate_reference_contract,
+    validate_reference_pool,
     validate_render_alpha,
     validate_style,
 )
@@ -621,6 +623,11 @@ class GenerationPlan:
     geometry: GeometrySpec
     appearance: AppearanceSpec
     references: list[ReferenceAsset] = field(default_factory=list)
+    # The references that were *available* on the caller's reference root, whether
+    # or not this plan attached them. The renderer never samples from these; they
+    # exist so the engine can say "you had iron_ore.png and did not attach it"
+    # instead of drawing the asset and leaving that fact in a JSON field.
+    available_references: list[ReferenceAsset] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.geometry.width != self.request.width or self.geometry.height != self.request.height:
@@ -1320,6 +1327,7 @@ class GenerationPipeline:
                     geometry=locked_reference_geometry,
                     appearance=plan.appearance,
                     references=plan.references,
+                    available_references=plan.available_references,
                 )
         if plan.request.shape_policy == "reference":
             reference_geometry = reference_fallback_geometry(
@@ -1336,6 +1344,7 @@ class GenerationPipeline:
                     geometry=reference_geometry,
                     appearance=plan.appearance,
                     references=plan.references,
+                    available_references=plan.available_references,
                 )
         effective_repairer = self.repairer
         effective_max_repairs = self.max_geometry_repairs
@@ -1420,6 +1429,7 @@ class GenerationPipeline:
                         geometry=recovered_geometry,
                         appearance=active_plan.appearance,
                         references=active_plan.references,
+                        available_references=active_plan.available_references,
                     )
                     partition_recovery = recovered_geometry
             except (KeyError, TypeError, ValueError):
@@ -1597,15 +1607,47 @@ class GenerationPipeline:
         # Why this reference: the same scoring table the renderer used, kept as
         # an artifact next to the sprite. A wrong-looking asset can then be
         # traced to the exact candidate that won and the ones that lost.
-        artifacts.append(_write_json(
-            root / "reference_selection.json",
-            reference_selection_report(
-                active_plan.references,
-                active_plan.request.width,
-                active_plan.request.height,
-                target_mask=compiled.mask,
-            ),
-        ))
+        selection = reference_selection_report(
+            active_plan.references,
+            active_plan.request.width,
+            active_plan.request.height,
+            target_mask=compiled.mask,
+        )
+        artifacts.append(_write_json(root / "reference_selection.json", selection))
+        # ...and the same answer as a validation stage, because a fact that only
+        # lives in a JSON field nobody reads is a fact that ships.
+        reference_result = validate_reference_contract(
+            selection,
+            shape_edit_mode=active_plan.descriptor.shape_edit_mode,
+            waiver=active_plan.descriptor.reference_waiver,
+            asset="%s:%s" % (active_plan.request.namespace, active_plan.request.name),
+        )
+        artifacts.append(_write_json(root / "validation_reference.json", reference_result))
+        # A reference that was on disk and never attached is a different failure
+        # from having none at all, and it is the one a person actually spots:
+        # "this doesn't reference iron ore at all". The pool is whatever the
+        # caller scanned; the renderer never samples from it.
+        pool_result = validate_reference_pool(
+            [reference.name for reference in active_plan.references],
+            [reference.name for reference in active_plan.available_references],
+            asset=active_plan.request.name,
+            waiver=active_plan.descriptor.reference_waiver,
+        )
+        artifacts.append(_write_json(root / "validation_reference_pool.json", pool_result))
+        for message in pool_result.errors:
+            print("WARNING: %s" % message)
+        reference_alert = {
+            "step": selection.get("step"),
+            "chosen": (selection.get("chosen") or {}).get("name"),
+            "step_detail": selection.get("step_detail"),
+            "passed": reference_result.passed,
+            "errors": list(reference_result.errors),
+            "warnings": list(reference_result.warnings),
+        }
+        if reference_result.errors:
+            print("WARNING: %s" % reference_result.errors[0])
+        elif reference_result.warnings:
+            print("NOTE: %s" % reference_result.warnings[0])
         # What the raster actually came out like: value bands, accent spend and
         # the accent-to-base step. Always written, whether or not the plan
         # declared a budget to gate on.
@@ -1613,6 +1655,7 @@ class GenerationPipeline:
         artifacts.append(_write_json(
             root / "style_report.json",
             {
+                "reference_alert": reference_alert,
                 "bands": band_report(
                     sprite,
                     maximum_isolated=active_plan.appearance.band_maximum_isolated,
@@ -1626,6 +1669,13 @@ class GenerationPipeline:
                     budget=active_plan.appearance.accent_budget,
                     minimum_cluster=active_plan.appearance.accent_min_cluster,
                     edge_max=active_plan.appearance.accent_edge_max,
+                    motif_repeat_max=active_plan.appearance.accent_motif_repeat_max,
+                    layout_min_size_cv=active_plan.appearance.accent_layout_min_size_cv,
+                    layout_min_spacing_cv=active_plan.appearance.accent_layout_min_spacing_cv,
+                    ramp_min_pixels=active_plan.appearance.accent_ramp_min_pixels,
+                    ramp_min_levels=active_plan.appearance.accent_ramp_min_levels,
+                    ramp_max_dominant_share=active_plan.appearance.accent_ramp_max_dominant_share,
+                    ramp_min_monotone=active_plan.appearance.accent_ramp_min_monotone,
                 ),
             },
         ))
@@ -1673,7 +1723,9 @@ class GenerationPipeline:
             sprite,
             expected_mask=entity_alpha_contract.alpha if entity_alpha_contract is not None else compiled.mask,
         )
-        final_result = aggregate_results([pre_render, render_result, style_result])
+        final_result = aggregate_results(
+            [pre_render, render_result, style_result, reference_result, pool_result]
+        )
         artifacts.extend(
             [
                 _write_json(root / "validation_render.json", render_result),

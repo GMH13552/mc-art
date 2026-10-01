@@ -126,9 +126,7 @@
     "part_reference_sampling": {
       "face": "pattern"
     },
-    "part_reference_sources": {
-      "face": "deepslate"
-    },
+    "part_reference_sources": {},
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_budget": 0,

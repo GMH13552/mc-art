@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from .asset_groups import CATEGORIES, build_catalogue
@@ -310,8 +311,17 @@ def _render(args: argparse.Namespace) -> int:
     credentials, no network and no judgement.
     """
     from .pipeline import GenerationPipeline
+    from .planfile import reference_pool
 
     plan = plan_from_file(args.plan)
+    if args.reference_pool:
+        # Whatever sat on the reference root, attached or not. Without a pool the
+        # "you had iron_ore.png and did not attach it" check cannot run, and the
+        # render says so rather than implying it looked.
+        pool = []
+        for directory in args.reference_pool:
+            pool.extend(reference_pool(directory))
+        plan = replace(plan, available_references=pool)
     result = GenerationPipeline(
         critic=_OfflineCritic(), repairer=None, max_geometry_repairs=0,
     ).run(plan, args.out, package=not args.no_package)
@@ -1038,6 +1048,9 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--plan", required=True)
     render.add_argument("--out", required=True)
     render.add_argument("--no-package", action="store_true")
+    render.add_argument("--reference-pool", action="append", metavar="DIR",
+                        help="a reference root to compare the plan against: catches a "
+                             "same-class reference that was available and not attached")
     render.set_defaults(handler=_render)
 
     why = sub.add_parser(
