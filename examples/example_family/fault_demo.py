@@ -261,14 +261,50 @@ def fault_pasted_band() -> dict:
 def fault_relaxed_limit() -> dict:
     """A plan that widened its own ruler and did not say so.
 
-    The ingot as it was delivered before this round: ``accent_edge_max`` lifted
-    from the family's 60 to 90 with no waiver, while the product measures 83 --
-    it passes only because the limit moved.
+    The gate only fires when the relaxation is what lets the product through, so
+    the fixture has to be a product that genuinely exceeds the engine reference:
+    the pasted band, with the limit widened to 200 around it. (The ingot that
+    originally exposed this now sits at edge 7, so widening a limit around it is
+    correctly silent -- there is nothing to hide.)
+    """
+    data = fault_pasted_band()
+    data["request"]["name"] = "fault_relaxed_limit"
+    data["appearance"]["accent_edge_max"] = 200
+    data["appearance"].pop("threshold_waiver", None)
+    return data
+
+
+def fault_unaudited_accent() -> dict:
+    """The two-round waste, reproduced: two sources deciding the accent.
+
+    The ingot as it actually sat for two rounds -- a hand-drawn pixel_map band
+    painting bright amber on top of the derived highlight. Every gate measured the
+    derived set; the picture showed the union. This is what ``unaudited_accent``
+    exists to catch.
     """
     data = _load("example_ingot")
-    data["request"]["name"] = "fault_relaxed_limit"
-    data["appearance"]["accent_edge_max"] = 90
-    data["appearance"].pop("threshold_waiver", None)
+    data["request"]["name"] = "fault_unaudited_accent"
+    data["appearance"]["palette"].update(
+        {"star_light": "#F0BE6E", "star_core": "#FFE3B0"}
+    )
+    _with_pixel_map(data, [
+        "................",
+        "................",
+        "................",
+        "................",
+        ".....21112......",
+        "....2112112.....",
+        ".....21112......",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+    ], {"1": "#F0BE6E", "2": "#FFE3B0"})
     return data
 
 
@@ -435,7 +471,7 @@ def main(argv: list[str] | None = None) -> int:
         "lone-dot", "ugly-dots", "lone-dot-cleaned", "scatter", "hard-edge",
         "other-accent", "contour", "motif-repeat", "layout-grid", "ramp-flat",
         "no-reference", "no-reference-waiver", "pool-unused", "pool-empty",
-        "bar-shape", "relaxed-limit",
+        "bar-shape", "relaxed-limit", "unaudited-accent",
     )
     if args.list:
         for name in cases:
@@ -554,7 +590,9 @@ def main(argv: list[str] | None = None) -> int:
     alien_run = _render(alien, out / "other-accent")
     family = family_axes(
         [str(good_run.sprite_path), str(alien_run.sprite_path)],
-        accent_colors=["#F0BE6E", "#6ED2EB"],
+        # The ore's own ramp plus the alien cyan: the family test must be able to
+        # SEE both members' accents, and the ore's ramp is deliberately muted now.
+        accent_colors=["#B69A7B", "#947C60", "#746048", "#564634", "#6ED2EB", "#2E7F9E"],
     )
     checks.append((
         "other-accent -> family accent hue span fails",
@@ -748,6 +786,22 @@ def main(argv: list[str] | None = None) -> int:
             "relaxed-limit", "FAILED" if not run.validation.passed else "passed",
             len(limit_errors)))
         for message in limit_errors[:1]:
+            print("             %s" % message)
+
+    if wanted("unaudited-accent"):
+        data = fault_unaudited_accent()
+        run = _render(data, out / "unaudited-accent")
+        found = [
+            error for error in run.validation.errors if "never measured by any gate" in error
+        ]
+        checks.append((
+            "unaudited-accent -> paint no gate was told about is caught",
+            bool(found),
+            found[0] if found else "nothing reported",
+        ))
+        print("%-12s unaudited: validation=%s errors=%d" % (
+            "unaudited", "FAILED" if not run.validation.passed else "passed", len(found)))
+        for message in found[:1]:
             print("             %s" % message)
 
     # A sheet so the difference can be looked at, not just counted.

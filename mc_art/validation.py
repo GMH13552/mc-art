@@ -443,7 +443,27 @@ def validate_style(
         maximum_isolated=getattr(appearance, "band_maximum_isolated", None),
         maximum_step=getattr(appearance, "band_maximum_step", None),
     )
-    errors = list(audit["reasons"]) + list(bands["reasons"])
+    # The independent scan. Every other gate trusts a declaration; this one does
+    # not, because the failure it exists for is a declaration that did not match
+    # the picture.
+    from .style import unaudited_accent_report
+
+    declared_points = {tuple(point) for point in (accent_points or audit["points"] or [])}
+    unaudited, unaudited_reasons = unaudited_accent_report(rendered, declared_points)
+    warnings: list[str] = []
+    # Two sources deciding the accent is almost always a leftover, and it is
+    # exactly the situation where the gates measure one set and the picture shows
+    # another.
+    if getattr(appearance, "pixel_map", None) and getattr(
+        appearance, "accent_from_reference", None
+    ):
+        warnings.append(
+            "this plan declares BOTH appearance.pixel_map and "
+            "appearance.accent_from_reference, so two sources decide the accent pixels and the "
+            "hand-drawn map paints over the derived one. Remove whichever is the leftover; the "
+            "unaudited_accent scan reports what it causes"
+        )
+    errors = list(audit["reasons"]) + list(bands["reasons"]) + list(unaudited_reasons)
     metrics: dict[str, float | int | str | bool] = {
         "accent_detection": str(audit["detection"]),
         "accent_pixels": int(audit["accent_pixels"]),
@@ -486,6 +506,9 @@ def validate_style(
         "accent_luma_mean": audit["accent_luma_mean"],
         "base_luma_mean": audit["base_luma_mean"],
         "accent_structure_ok": bool(audit["structure"]["ok"]),
+        "accent_unaudited_pixels": int(unaudited["unaudited_pixels"]),
+        "accent_unaudited_clusters": int(unaudited["clusters"]),
+        "accent_unaudited_ok": bool(unaudited["ok"]),
         "band_count": int(bands["band_count"]),
         "band_isolated_pixels": int(bands["isolated_pixels"]),
         "band_isolated_share": float(bands["isolated_share"]),

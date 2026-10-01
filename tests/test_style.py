@@ -448,12 +448,18 @@ REJECTED_INGOT_ROWS = [
 ]
 
 
-def _paint(path: Path, rows: list[str], legend: dict[str, tuple[int, int, int]]) -> Path:
+def _paint(
+    path: Path, rows: list[str], legend: dict[str, "tuple[int, int, int] | str"]
+) -> Path:
     image = Image.new("RGBA", (16, 16), STONE_BASE)
     for y, row in enumerate(rows):
         for x, symbol in enumerate(row):
-            if symbol != ".":
-                image.putpixel((x, y), legend[symbol] + (255,))
+            if symbol == ".":
+                continue
+            colour = legend[symbol]
+            if isinstance(colour, str):
+                colour = tuple(int(colour[index:index + 2], 16) for index in (1, 3, 5))
+            image.putpixel((x, y), tuple(colour) + (255,))
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path)
     return path
@@ -538,6 +544,55 @@ def test_the_bar_gate_fires_on_a_pasted_band_and_passes_a_form_following_highlig
     derived = _paint(tmp_path / "derived.png", ["".join(row) for row in rows], RAMP)
     derived_audit = style.accent_audit(derived, accent_colors=["#F0BE6E", "#8E5C1C"], budget=40)
     assert derived_audit["structure"]["shape"]["ok"] is True, derived_audit["structure"]["shape"]
+
+
+def test_the_scan_finds_accent_paint_no_gate_was_told_about(tmp_path: Path) -> None:
+    """The regression that cost two rounds, as a test.
+
+    A bright hand-painted band sits in a sprite while the declared accent set
+    holds only a few pixels elsewhere. Every declarative gate is happy; the scan
+    that knows nothing about the palette is not.
+    """
+    band = [
+        "................", "................", "................", "................",
+        ".....21112......", "....2112112.....", ".....21112......", "................",
+        "................", "................", "................", "................",
+        "................", "................", "................", "................",
+    ]
+    sprite = _paint(tmp_path / "hidden.png", band, {"1": "#F0BE6E", "2": "#FFE3B0"})
+    declared = {(1, 1), (2, 1), (1, 2), (2, 2)}
+    report, reasons = style.unaudited_accent_report(sprite, declared)
+    assert report["ok"] is False
+    assert report["unaudited_pixels"] >= 10
+    assert reasons and "never measured by any gate" in reasons[0]
+    assert "#F0BE6E" in reasons[0], "the report must name the colours it found"
+
+    # Declare what is actually there and the scan goes quiet.
+    everything = {
+        (x, y) for y in range(16) for x in range(16) if band[y][x] != "."
+    }
+    clean, clean_reasons = style.unaudited_accent_report(sprite, everything)
+    assert clean["ok"] is True and clean_reasons == []
+
+
+def test_the_scan_does_not_cry_wolf_on_vanilla() -> None:
+    """The independent criterion must be no wider than vanilla's own art.
+
+    Vanilla iron_ore's specks are chromatic against grey stone, so the scan sees
+    them -- but they are all inside the declared set, so it reports nothing. A
+    scan that fired on vanilla would be measuring the art style, not a mistake.
+    """
+    reference = REFS / "iron_ore.png"
+    if not reference.exists():
+        pytest.skip("vanilla reference not extracted")
+    declared, _mode = style.accent_points(
+        reference,
+        accent_colors=["#887455", "#AF8E77", "#D8AF93", "#E2C0AA", "#77674F"],
+        base_colors=["#7F7F7F", "#747474", "#8F8F8F", "#686868"],
+    )
+    report, reasons = style.unaudited_accent_report(reference, set(declared))
+    assert report["ok"] is True, reasons
+    assert report["checked"] > 0, "the scan must actually find something to compare"
 
 
 def test_a_relaxed_limit_that_only_the_relaxation_lets_pass_is_reported() -> None:

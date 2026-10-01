@@ -31,6 +31,7 @@ import re
 from collections import Counter, deque
 from math import atan2, cos, pi, sin
 from pathlib import Path
+from statistics import median
 from typing import Any, Iterable, Sequence
 
 from PIL import Image
@@ -189,6 +190,108 @@ def components(points: set[tuple[int, int]], diagonal: bool = True) -> list[set[
 # ---------------------------------------------------------------------------
 # value bands: a ramp, not scatter
 # ---------------------------------------------------------------------------
+
+
+def unaudited_accent_report(
+    image: "Image.Image | str | Path",
+    declared_points: set[tuple[int, int]],
+    *,
+    chroma_delta_min: float = 45.0,
+    minimum_cluster: int = 4,
+    window: int = 2,
+) -> tuple[dict[str, Any], list[str]]:
+    """Scan the rendered sprite for accent pixels NO gate was told about.
+
+    This exists because of a real two-round waste. An ingot plan carried both a
+    hand-drawn ``pixel_map`` band and an ``accent_from_reference`` highlight. The
+    audit counted the five pixels the renderer declared; the band was seventeen
+    pixels painted on top of them. Every gate was green, the image was wrong, and
+    nobody could see it from the numbers -- because the numbers described a
+    different set of pixels than the picture was made of.
+
+    So the scan is deliberately **independent of any declaration**: no swatch
+    distance, no declared palette, no reference. It asks only "does this pixel
+    stand out from its own surroundings", by chroma against the local median.
+    Whatever it finds that the declared set does not contain is, by definition,
+    accent-looking paint that no gate measured.
+    """
+    loaded = _load(image)
+    pixels = _opaque_map(loaded)
+    if not pixels:
+        return (
+            {
+                "applicable": False,
+                "checked": 0,
+                "declared": len(declared_points),
+                "unaudited_pixels": 0,
+                "clusters": 0,
+                "samples": [],
+                "ok": True,
+            },
+            [],
+        )
+    candidates: set[tuple[int, int]] = set()
+    offsets = [
+        (dx, dy)
+        for dx in range(-window, window + 1)
+        for dy in range(-window, window + 1)
+        if (dx, dy) != (0, 0)
+    ]
+    for point, colour in pixels.items():
+        x, y = point
+        local = [
+            pixels[(x + dx, y + dy)]
+            for dx, dy in offsets
+            if (x + dx, y + dy) in pixels
+        ]
+        if len(local) < 4:
+            continue
+        if chroma(colour) - median([chroma(other) for other in local]) >= chroma_delta_min:
+            candidates.add(point)
+    found: set[tuple[int, int]] = set()
+    clusters = 0
+    for group in components(candidates):
+        if len(group) >= minimum_cluster:
+            found |= group
+            clusters += 1
+    unaudited = sorted(found - set(declared_points))
+    samples = [
+        {
+            "at": [x, y],
+            "colour": "#%02X%02X%02X" % pixels[(x, y)][:3],
+            "chroma": round(chroma(pixels[(x, y)]), 1),
+        }
+        for x, y in unaudited[:8]
+    ]
+    report = {
+        "applicable": True,
+        "checked": len(found),
+        "declared": len(declared_points),
+        "unaudited_pixels": len(unaudited),
+        "clusters": clusters,
+        "samples": samples,
+        "ok": not unaudited,
+    }
+    reasons: list[str] = []
+    if unaudited:
+        reasons.append(
+            "%d accent-looking pixel(s) in %d region(s) were never measured by any gate: the "
+            "sprite contains paint that stands out from its surroundings but is absent from the "
+            "set the audit was given. Samples: %s. The usual cause is a plan carrying BOTH "
+            "pixel_map and accent_from_reference -- two sources deciding the accent, the "
+            "hand-drawn one painting over the derived one, so the gates measure one set while the "
+            "picture shows the union"
+            % (
+                len(unaudited),
+                clusters,
+                ", ".join(
+                    "%s at (%d,%d) chroma %.0f"
+                    % (sample["colour"], sample["at"][0], sample["at"][1], sample["chroma"])
+                    for sample in samples
+                ),
+            )
+        )
+    return report, reasons
 
 
 def band_report(

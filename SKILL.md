@@ -376,6 +376,32 @@ green gate is the *start* of this step, never a substitute for it.
 If you cannot answer question 3 with the reference tile next to the product,
 you have not done this step.
 
+### And a green gate is not evidence that the gate looked at your picture
+
+> Green gates do not mean it looks good; **and a gate may never have measured
+> what your eye is looking at** — before handing over, scan the rendered image
+> again with a criterion **independent of any declaration**. A pixel nobody
+> declared passes every declarative check there is.
+
+That is not a hypothetical. An ingot plan carried both a hand-drawn `pixel_map`
+band and a derived `accent_from_reference` highlight. The gates measured the five
+pixels the renderer declared. The band was seventeen pixels painted on top of
+them. Every check was green, the picture was visibly wrong, and two rounds were
+spent tuning parameters that could not change the image — because the numbers and
+the picture were describing different pixels.
+
+The engine now refuses that:
+
+* **`unaudited_accent`** scans the finished sprite with no knowledge of the
+  palette, the swatches or the reference — it only asks whether a pixel's chroma
+  stands out from its own local median — and reports anything it finds that the
+  audited set does not contain, with locations and colours.
+* A plan declaring **both** `pixel_map` and `accent_from_reference` raises a
+  warning, because that combination almost always means one of them is a leftover.
+
+Run it before every handover, and if it fires, believe the picture and delete the
+leftover — not the check.
+
 ## Before you hand it over: look at it in the game's view
 
 An atlas can land on exactly the right rects and the mob can still be wrong: a
