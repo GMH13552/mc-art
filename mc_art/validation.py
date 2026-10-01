@@ -387,6 +387,74 @@ def validate_render_alpha(
     )
 
 
+def validate_style(appearance: object, rendered: Image.Image) -> ValidationResult:
+    """Check the art-quality budgets the plan declared, on the finished sprite.
+
+    Three declarations become three hard errors, because each one is a thing a
+    person asked for by name and then had to point at by hand:
+
+    * ``accent_budget`` -- "a plain block has no accent pixels". Zero is a
+      budget like any other.
+    * ``accent_min_cluster`` -- "not one or two jarring dots". Cluster sizes are
+      reported; the renderer repaints undersized ones only if ``accent_cleanup``
+      asked it to.
+    * ``accent_edge_max`` -- "the orange and the blue do not read as one thing":
+      the luma step where the accent meets its base material.
+    * ``band_maximum_isolated`` / ``band_maximum_step`` -- "a ramp, not
+      equal-value scatter".
+
+    With nothing declared the stage still reports the numbers and passes, so a
+    caller can watch the metric before it decides to gate on it.
+    """
+    from .appearance import declared_base_swatches
+    from .style import accent_audit, band_report
+
+    base_swatches = declared_base_swatches(appearance)  # type: ignore[arg-type]
+    audit = accent_audit(
+        rendered,
+        accent_colors=getattr(appearance, "accent_colors", []),
+        base_colors=base_swatches,
+        palette=getattr(appearance, "palette", None),
+        budget=getattr(appearance, "accent_budget", None),
+        minimum_cluster=getattr(appearance, "accent_min_cluster", 1),
+        edge_max=getattr(appearance, "accent_edge_max", None),
+    )
+    bands = band_report(
+        rendered,
+        maximum_isolated=getattr(appearance, "band_maximum_isolated", None),
+        maximum_step=getattr(appearance, "band_maximum_step", None),
+    )
+    errors = list(audit["reasons"]) + list(bands["reasons"])
+    metrics: dict[str, float | int | str | bool] = {
+        "accent_detection": str(audit["detection"]),
+        "accent_pixels": int(audit["accent_pixels"]),
+        "accent_budget": -1 if audit["budget"] is None else int(audit["budget"]),
+        "accent_clusters": int(audit["clusters"]),
+        "accent_smallest_cluster": int(audit["smallest_cluster"]),
+        "accent_below_minimum_pixels": int(audit["below_minimum_pixels"]),
+        "accent_edge_delta_p90": -1.0 if audit["edge_delta_p90"] is None else float(audit["edge_delta_p90"]),
+        "accent_within_budget": bool(audit["within_budget"]),
+        "band_count": int(bands["band_count"]),
+        "band_isolated_pixels": int(bands["isolated_pixels"]),
+        "band_isolated_share": float(bands["isolated_share"]),
+        "band_mean_neighbour_step": float(bands["mean_neighbour_step"]),
+        "band_verdict": str(bands["verdict"]),
+    }
+    warnings: list[str] = []
+    if audit["budget"] is None and audit["accent_pixels"]:
+        warnings.append(
+            "%d accent pixel(s) reported; declare accent_budget to make this a gate"
+            % audit["accent_pixels"]
+        )
+    return ValidationResult(
+        passed=not errors,
+        stage="style",
+        metrics=metrics,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
 class SemanticCritic(Protocol):
     def review(self, descriptor: ShapeDescriptor, compiled: CompiledGeometry) -> ValidationResult:
         """Review semantic recognisability without altering the geometry."""

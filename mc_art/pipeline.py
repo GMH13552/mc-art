@@ -12,7 +12,14 @@ from typing import Protocol
 
 from PIL import Image, ImageDraw
 
-from .appearance import _select_reference, checkerboard_preview, render_appearance, scale_preview
+from .appearance import (
+    _select_reference,
+    checkerboard_preview,
+    declared_base_swatches,
+    reference_selection_report,
+    render_appearance,
+    scale_preview,
+)
 from .contracts import (
     AppearanceSpec,
     AssetRequest,
@@ -31,8 +38,16 @@ from .reference_geometry import (
     reference_partition_geometry,
     reference_silhouette_partition,
 )
+from .style import accent_audit, band_report
 from .uv_layout import render_entity_preview, render_front_preview, render_isometric_preview
-from .validation import SemanticCritic, StructuralCritic, aggregate_results, validate_geometry, validate_render_alpha
+from .validation import (
+    SemanticCritic,
+    StructuralCritic,
+    aggregate_results,
+    validate_geometry,
+    validate_render_alpha,
+    validate_style,
+)
 
 
 def _geometry_can_be_rendered(spec: GeometrySpec, compiled: CompiledGeometry) -> bool:
@@ -1579,6 +1594,41 @@ class GenerationPipeline:
         checkerboard_preview(sprite).save(checker_preview_path, "PNG")
         artifacts.extend([sprite_path, preview_path, checker_preview_path])
         artifacts.append(self._texture_audit(root, plan, active_plan, sprite))
+        # Why this reference: the same scoring table the renderer used, kept as
+        # an artifact next to the sprite. A wrong-looking asset can then be
+        # traced to the exact candidate that won and the ones that lost.
+        artifacts.append(_write_json(
+            root / "reference_selection.json",
+            reference_selection_report(
+                active_plan.references,
+                active_plan.request.width,
+                active_plan.request.height,
+                target_mask=compiled.mask,
+            ),
+        ))
+        # What the raster actually came out like: value bands, accent spend and
+        # the accent-to-base step. Always written, whether or not the plan
+        # declared a budget to gate on.
+        style_result = validate_style(active_plan.appearance, sprite)
+        artifacts.append(_write_json(
+            root / "style_report.json",
+            {
+                "bands": band_report(
+                    sprite,
+                    maximum_isolated=active_plan.appearance.band_maximum_isolated,
+                    maximum_step=active_plan.appearance.band_maximum_step,
+                ),
+                "accent": accent_audit(
+                    sprite,
+                    accent_colors=active_plan.appearance.accent_colors,
+                    base_colors=declared_base_swatches(active_plan.appearance),
+                    palette=active_plan.appearance.palette,
+                    budget=active_plan.appearance.accent_budget,
+                    minimum_cluster=active_plan.appearance.accent_min_cluster,
+                    edge_max=active_plan.appearance.accent_edge_max,
+                ),
+            },
+        ))
         if active_plan.request.form.value == "entity_uv":
             try:
                 entity_preview = render_front_preview(sprite, active_plan.geometry.uv_regions, scale=12)
@@ -1623,10 +1673,11 @@ class GenerationPipeline:
             sprite,
             expected_mask=entity_alpha_contract.alpha if entity_alpha_contract is not None else compiled.mask,
         )
-        final_result = aggregate_results([pre_render, render_result])
+        final_result = aggregate_results([pre_render, render_result, style_result])
         artifacts.extend(
             [
                 _write_json(root / "validation_render.json", render_result),
+                _write_json(root / "validation_style.json", style_result),
                 _write_json(root / "validation.json", final_result),
             ]
         )

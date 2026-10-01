@@ -1,0 +1,174 @@
+{
+  "request": {
+    "query": "example ingot: the family's metal, iron_ingot's contour exactly, one amber sheen along the top face",
+    "form": "item",
+    "name": "example_ingot",
+    "namespace": "examplepack",
+    "width": 16,
+    "height": 16,
+    "novelty": 0.2,
+    "target_path": null,
+    "shape_policy": "planned",
+    "seed": 14,
+    "pack_format": 15
+  },
+  "descriptor": {
+    "target": "example ingot item",
+    "semantic": "A 16x16 item sprite: the family's metal, keeping vanilla iron_ingot's contour exactly, shaded as one continuous cool ramp, with a single warm sheen along the top face as the only accent.",
+    "visual_identity": [
+      "16x16 transparent-background item sprite",
+      "contour identical to vanilla iron_ingot -- only the colour is ours",
+      "cold blue-grey metal, one continuous value ramp",
+      "one amber sheen following the top face; twelve accent pixels at most"
+    ],
+    "parts": [
+      {
+        "id": "ingot",
+        "meaning": "the whole ingot",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["ingot", "bar"],
+        "contour_intent": "compact"
+      }
+    ],
+    "negative_identities": ["iron ingot", "gold ingot", "brick", "tool"],
+    "orientation": "centered, same three-quarter view as vanilla iron_ingot",
+    "reference_strategy": "appearance_only: keep iron_ingot's alpha contour exactly and take its shading as brightness only, so the metal keeps the reference's 3D rhythm while the hue becomes the family's. The sheen is a declared accent with a pixel budget and a minimum cluster size, so it cannot arrive as a lone dot.",
+    "shape_edit_mode": "appearance_only",
+    "reference_part_map": null,
+    "target_part_map": null
+  },
+  "geometry": {
+    "width": 16,
+    "height": 16,
+    "parts": [
+      {
+        "id": "ingot",
+        "meaning": "the whole ingot",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["ingot"],
+        "contour_intent": "compact"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "ingot_mask",
+        "part_id": "ingot",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [0, 0],
+          "marker": "X",
+          "rows": [
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX"
+          ]
+        },
+        "layer": 0
+      }
+    ],
+    "connections": [],
+    "constraints": [],
+    "uv_regions": [],
+    "background_transparent": true
+  },
+  "appearance": {
+    "palette": {
+      "steel_1": "#2C313B",
+      "steel_2": "#3B424F",
+      "steel_3": "#4E5666",
+      "steel_4": "#646D80",
+      "steel_5": "#7E8799",
+      "star_core": "#FFE3B0",
+      "star_light": "#F0BE6E",
+      "star_mid": "#CF9440",
+      "star_rim": "#8E5C1C"
+    },
+    "parts": {
+      "ingot": {
+        "colors": ["steel_1", "steel_2", "steel_3", "steel_4", "steel_5"],
+        "material": "metal",
+        "shade_axis": "top_left_to_bottom_right",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": [],
+        "shade_mode": "gradient"
+      }
+    },
+    "outline_color": null,
+    "outline_width": 0,
+    "transparent_background": true,
+    "reference_sampling": "value",
+    "region_rules": [],
+    "part_reference_sampling": {
+      "ingot": "value"
+    },
+    "part_reference_sources": {
+      "ingot": "iron_ingot"
+    },
+    "part_reference_composite": {},
+    "motif_policy": "model_authored",
+    "accent_colors": ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"],
+    "accent_budget": 16,
+    "accent_min_cluster": 3,
+    "accent_cleanup": true,
+    "accent_edge_max": 60,
+    "band_maximum_isolated": 0.1,
+    "band_maximum_step": 30,
+    "pixel_map": {
+      "legend": {
+        "1": "#FFE3B0",
+        "2": "#F0BE6E",
+        "3": "#CF9440",
+        "4": "#8E5C1C"
+      },
+      "rows": [
+        "................",
+        "................",
+        "................",
+        "................",
+        "......444.......",
+        ".....42324......",
+        "....44444.......",
+        ".....444........",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
+    }
+  },
+  "references": [
+    {
+      "path": "../refs/iron_ingot.png",
+      "name": "iron_ingot",
+      "roles": ["shape", "pixel_style"],
+      "notes": [
+        "group=minecraft:item/iron_ingot",
+        "shape authority for this request: appearance_only copies its contour and takes brightness only, so the silhouette cannot drift while the metal becomes ours"
+      ]
+    }
+  ]
+}

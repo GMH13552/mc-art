@@ -1,0 +1,183 @@
+{
+  "request": {
+    "query": "example ore: the same stone, with warm star-metal deposits instead of ugly dots",
+    "form": "custom",
+    "name": "example_ore",
+    "namespace": "examplepack",
+    "width": 16,
+    "height": 16,
+    "novelty": 0.2,
+    "target_path": null,
+    "shape_policy": "planned",
+    "seed": 11,
+    "pack_format": 15
+  },
+  "descriptor": {
+    "target": "example ore block face",
+    "semantic": "A 16x16 opaque block face: example_stone's own face, with four star-metal deposits. Each deposit is a small cluster with its own light core and dark rim, so it reads as a mineral fleck rather than a lone dot.",
+    "visual_identity": [
+      "16x16 opaque block face, no transparency",
+      "every non-deposit pixel is byte-identical to example_stone",
+      "four deposits, each with an internal light-to-dark ramp",
+      "the deposits are the face's only accent pixels"
+    ],
+    "parts": [
+      {
+        "id": "face",
+        "meaning": "the stone face, carrying the deposits",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["ore", "stone", "block face"],
+        "contour_intent": "surface"
+      }
+    ],
+    "negative_identities": ["plain stone", "cobblestone", "coal", "moss"],
+    "orientation": "flat, tiles seamlessly",
+    "reference_strategy": "Take example_stone's exact reference, palette and sampling mode so the base face is the same stone by construction, then place four deposits with an explicit pixel map. Declaring the accent swatches, a pixel budget and a minimum deposit size turns 'don't use ugly dots' into something the render can be held to.",
+    "shape_edit_mode": "appearance_only",
+    "reference_part_map": null,
+    "target_part_map": null
+  },
+  "geometry": {
+    "width": 16,
+    "height": 16,
+    "parts": [
+      {
+        "id": "face",
+        "meaning": "the whole face",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["stone"],
+        "contour_intent": "surface"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "face_mask",
+        "part_id": "face",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [0, 0],
+          "marker": "X",
+          "rows": [
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX"
+          ]
+        },
+        "layer": 0
+      }
+    ],
+    "connections": [],
+    "constraints": [],
+    "uv_regions": [
+      {
+        "id": "face_all",
+        "part_id": "face",
+        "bbox": [0, 0, 16, 16],
+        "face": "all",
+        "required": true,
+        "notes": "identical to example_stone's region, so the two share one base face"
+      }
+    ],
+    "background_transparent": false
+  },
+  "appearance": {
+    "palette": {
+      "stone_1": "#39404D",
+      "stone_2": "#474F5F",
+      "stone_3": "#576073",
+      "stone_4": "#6A7488",
+      "stone_5": "#808A9E",
+      "star_core": "#FFE3B0",
+      "star_light": "#F0BE6E",
+      "star_mid": "#CF9440",
+      "star_rim": "#8E5C1C"
+    },
+    "parts": {
+      "face": {
+        "colors": ["stone_1", "stone_2", "stone_3", "stone_4", "stone_5"],
+        "material": "stone",
+        "shade_axis": "none",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": [],
+        "shade_mode": "bands"
+      }
+    },
+    "outline_color": null,
+    "outline_width": 0,
+    "transparent_background": false,
+    "reference_sampling": "pattern",
+    "region_rules": [],
+    "part_reference_sampling": {
+      "face": "pattern"
+    },
+    "part_reference_sources": {
+      "face": "stone"
+    },
+    "part_reference_composite": {},
+    "motif_policy": "model_authored",
+    "accent_colors": ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"],
+    "accent_budget": 36,
+    "accent_min_cluster": 3,
+    "accent_cleanup": true,
+    "accent_edge_max": 60,
+    "band_maximum_isolated": 0.1,
+    "band_maximum_step": 30,
+    "pixel_map": {
+      "legend": {
+        "1": "#FFE3B0",
+        "2": "#F0BE6E",
+        "3": "#CF9440",
+        "4": "#8E5C1C"
+      },
+      "rows": [
+        "................",
+        "...44...........",
+        "..4234....44....",
+        "...44....4234...",
+        "..........44....",
+        "................",
+        "................",
+        "....44..........",
+        "...4234.........",
+        "....44..........",
+        "..........44....",
+        ".........4234...",
+        "..........44....",
+        "................",
+        "................",
+        "................"
+      ]
+    }
+  },
+  "references": [
+    {
+      "path": "../refs/stone.png",
+      "name": "stone",
+      "roles": ["shape", "material", "pixel_style"],
+      "notes": [
+        "group=minecraft:block/stone",
+        "deliberately the SAME reference, palette and sampling mode as example_stone, so the base face is one material by construction rather than by eye"
+      ]
+    }
+  ]
+}

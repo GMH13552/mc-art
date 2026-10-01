@@ -1,0 +1,59 @@
+{
+  "name": "example_desk",
+  "namespace": "examplepack",
+  "description": "a desk with a sheet of paper on it -- a block entity, not a recoloured plank",
+  "textures": {
+    "wood": "textures/example_planks.png",
+    "paper": "textures/example_paper.png"
+  },
+  "elements": [
+    {
+      "id": "top",
+      "from": [0, 13, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "up": {"texture": "wood", "uv": [0, 0, 16, 16]},
+        "down": {"texture": "wood", "uv": [0, 0, 16, 16]},
+        "north": {"texture": "wood", "uv": [0, 0, 16, 3]},
+        "south": {"texture": "wood", "uv": [0, 3, 16, 6]},
+        "west": {"texture": "wood", "uv": [0, 6, 16, 9]},
+        "east": {"texture": "wood", "uv": [0, 9, 16, 12]}
+      }
+    },
+    {
+      "id": "leg_nw",
+      "from": [0, 0, 0],
+      "to": [3, 13, 3],
+      "faces": {
+        "up": {"texture": "wood", "uv": [0, 0, 3, 3]},
+        "down": {"texture": "wood", "uv": [3, 0, 6, 3]},
+        "north": {"texture": "wood", "uv": [6, 0, 9, 13]},
+        "south": {"texture": "wood", "uv": [6, 0, 9, 13]},
+        "west": {"texture": "wood", "uv": [6, 0, 9, 13]},
+        "east": {"texture": "wood", "uv": [9, 0, 12, 13]}
+      }
+    },
+    {
+      "id": "leg_se",
+      "from": [13, 0, 13],
+      "to": [16, 13, 16],
+      "faces": {
+        "up": {"texture": "wood", "uv": [0, 0, 3, 3]},
+        "down": {"texture": "wood", "uv": [3, 0, 6, 3]},
+        "north": {"texture": "wood", "uv": [6, 0, 9, 13]},
+        "south": {"texture": "wood", "uv": [6, 0, 9, 13]},
+        "west": {"texture": "wood", "uv": [6, 0, 9, 13]},
+        "east": {"texture": "wood", "uv": [9, 0, 12, 13]}
+      }
+    },
+    {
+      "id": "sheet",
+      "from": [3, 16.05, 4],
+      "to": [13, 16.05, 12],
+      "faces": {
+        "up": {"texture": "paper", "uv": [0, 0, 10, 8]},
+        "down": {"texture": "paper", "uv": [0, 0, 10, 8]}
+      }
+    }
+  ]
+}

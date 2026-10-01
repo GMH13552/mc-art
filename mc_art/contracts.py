@@ -315,6 +315,13 @@ class PartAppearance:
     noise: float = 0.0
     highlight_ratio: float = 0.18
     marks: list[dict[str, Any]] = field(default_factory=list)
+    # How the authored ramp is sampled across the part. ``bands`` snaps every
+    # pixel to one of the authored swatches, which is what gives vanilla its
+    # pixel-art value steps. ``gradient`` interpolates continuously between
+    # them, which is the other thing a person asks for by name -- "可以是渐变的
+    # 或者不同块不同颜色". Both keep the silhouette and the palette owned by the
+    # model; only the value resolution changes.
+    shade_mode: str = "bands"
 
     def __post_init__(self) -> None:
         if not self.colors:
@@ -323,6 +330,8 @@ class PartAppearance:
             raise ValueError("appearance noise must be within 0..1")
         if not 0.0 <= self.highlight_ratio <= 1.0:
             raise ValueError("appearance highlight_ratio must be within 0..1")
+        if self.shade_mode not in {"bands", "gradient"}:
+            raise ValueError("appearance shade_mode must be bands or gradient")
 
 
 @dataclass(frozen=True)
@@ -364,6 +373,34 @@ class AppearanceSpec:
     # to normal rendering; another symbol resolves through ``legend``. It is
     # RGB-only, so this open raster contract cannot alter alpha or silhouette.
     pixel_map: dict[str, Any] | None = None
+    # The accent contract. A sprite that is not supposed to have one declares
+    # ``accent_budget: 0`` and the render stage fails if a single accent pixel
+    # appears -- the direct answer to "突兀的来一两个点". ``accent_colors`` names
+    # the swatches that count as the accent (hex or palette tokens); without it
+    # the engine still measures, by inferring the sprite's own hue and reporting
+    # saturated pixels outside it. ``accent_min_cluster`` is the smallest accent
+    # deposit the author accepts: smaller clusters are repainted with the base
+    # material before the sprite is written. ``accent_edge_max`` bounds how hard
+    # the step from an accent pixel to the material beside it may be.
+    accent_colors: list[str] = field(default_factory=list)
+    accent_budget: int | None = None
+    accent_min_cluster: int = 1
+    # ``accent_min_cluster`` is a gate: it says what will be refused. The
+    # renderer only *repairs* undersized deposits when the author asks for it,
+    # because silently rewriting a delivered pixel is not the engine's call.
+    # With this true, clusters below the minimum are repainted with the base
+    # material before the sprite is written and the gate then passes by
+    # construction; with it false the gate reports the fault instead.
+    accent_cleanup: bool = False
+    accent_edge_max: float | None = None
+    # Optional scatter gates. The first bounds the share of opaque pixels that
+    # are isolated from every neighbour by more than the engine's flat
+    # tolerance -- the literal "one or two jarring dots". The second bounds the
+    # average luma jump between adjacent pixels: a ramp keeps neighbours close,
+    # while a sprite whose every pixel is decided at random has a step near half
+    # its value range and only a few pixels isolated from all four neighbours.
+    band_maximum_isolated: float | None = None
+    band_maximum_step: float | None = None
 
     def __post_init__(self) -> None:
         if self.outline_width not in {0, 1}:
@@ -372,6 +409,16 @@ class AppearanceSpec:
             raise ValueError("reference_sampling must be none, value or pattern")
         if self.motif_policy not in {"free", "reference_locked", "model_authored", "none"}:
             raise ValueError("motif_policy must be free, reference_locked, model_authored or none")
+        if self.accent_budget is not None and self.accent_budget < 0:
+            raise ValueError("accent_budget must be zero or positive, or null for unchecked")
+        if self.accent_min_cluster < 1:
+            raise ValueError("accent_min_cluster must be at least one pixel")
+        if self.accent_edge_max is not None and self.accent_edge_max < 0:
+            raise ValueError("accent_edge_max must be zero or positive, or null for unchecked")
+        if self.band_maximum_isolated is not None and not 0.0 <= self.band_maximum_isolated <= 1.0:
+            raise ValueError("band_maximum_isolated must be within 0..1, or null for unchecked")
+        if self.band_maximum_step is not None and self.band_maximum_step < 0:
+            raise ValueError("band_maximum_step must be zero or positive, or null for unchecked")
         # A non-string mode must be reported as invalid data, never as a
         # TypeError from the membership test below.
         invalid_sampling = {
@@ -594,6 +641,16 @@ def geometry_from_dict(data: dict[str, Any]) -> GeometrySpec:
 
 def appearance_from_dict(data: dict[str, Any]) -> AppearanceSpec:
     normalized = dict(data)
+    # A model that means "no cap" writes -1, null or omits the key. All three
+    # are the same statement, so normalize at the boundary rather than making
+    # the renderer test for a sentinel.
+    raw_budget = normalized.get("accent_budget")
+    if raw_budget is not None:
+        try:
+            parsed_budget = int(raw_budget)
+        except (TypeError, ValueError):
+            parsed_budget = -1
+        normalized["accent_budget"] = None if parsed_budget < 0 else parsed_budget
     # The canonical wire format is a named colour mapping, but vision models
     # quite reasonably sometimes return a compact ordered palette after an
     # audit pass.  That representation contains the same colour evidence and

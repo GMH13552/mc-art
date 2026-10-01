@@ -11,6 +11,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from .contracts import AppearanceSpec, GeometrySpec, PartAppearance, ReferenceAsset, ReferenceRole
 from .geometry import CompiledGeometry
+from .style import accent_points, despeckle_accent
 
 
 def _hex_to_rgb(token: str) -> tuple[int, int, int]:
@@ -53,6 +54,26 @@ def _resolve_colors(style: PartAppearance, palette: dict[str, str]) -> list[tupl
     if not resolved:
         raise ValueError("part appearance needs at least one color")
     return resolved
+
+
+def declared_base_swatches(appearance: AppearanceSpec) -> list[str]:
+    """Every material swatch the plan named, so the accent test has a base.
+
+    The accent mask is only meaningful against the colours the asset is
+    otherwise made of. Those are exactly the swatches the model declared on its
+    parts plus any outline, resolved through the same palette the renderer uses.
+    """
+    swatches: list[str] = []
+    for style in appearance.parts.values():
+        for token in style.colors:
+            resolved = appearance.palette.get(str(token), str(token))
+            if resolved not in swatches:
+                swatches.append(str(resolved))
+    if appearance.outline_color:
+        resolved = appearance.palette.get(str(appearance.outline_color), str(appearance.outline_color))
+        if resolved not in swatches:
+            swatches.append(str(resolved))
+    return swatches
 
 
 def _luma(color: tuple[int, int, int]) -> float:
@@ -419,24 +440,42 @@ def _alpha_iou(reference: Image.Image, target_mask: Image.Image | None) -> float
     return len(target_points & candidate_points) / float(max(len(union), 1))
 
 
-def _select_reference(
+def _reference_candidates(
     references: list[ReferenceAsset] | None,
     width: int,
     height: int,
     target_mask: Image.Image | None = None,
-) -> tuple[Image.Image, ReferenceAsset, str] | None:
-    """Select the raster belonging to the locked geometry.
+) -> list[dict[str, object]]:
+    """Score every offered reference for this canvas, eligible or not.
 
-    Routing may attach a structural source together with a same-sized local
-    material/motif reference.  Choosing the first material reference makes its
-    pixel bands control unrelated support parts.  Alpha agreement with the
-    approved geometry is a generic disambiguator; roles only break ties.
+    The model asked which reference was used; the honest answer has to be the
+    same computation that actually picked it, including the candidates that
+    lost. "this asset referenced the wrong layer" is a question about *this*
+    table, so the table is produced once and both the renderer and the report
+    read it.
     """
-    if not references:
-        return None
-    candidates: list[tuple[float, int, Image.Image, ReferenceAsset, str]] = []
-    for index, reference in enumerate(references):
+    rows: list[dict[str, object]] = []
+    for index, reference in enumerate(references or []):
+        row: dict[str, object] = {
+            "name": reference.name,
+            "path": reference.path,
+            "roles": [role.value for role in reference.roles],
+            "notes": list(reference.notes),
+            "order": index,
+            "eligible": False,
+            "readable": False,
+            "reason_code": "",
+            "reason": "",
+            "mode": "exact",
+            "alpha_overlap": None,
+            "role_score": 0,
+            "score": 0.0,
+            "image": None,
+        }
+        rows.append(row)
         if ReferenceRole.NEGATIVE in reference.roles:
+            row["reason_code"] = "declared-negative"
+            row["reason"] = "declared negative: it says what the asset must not look like"
             continue
         if not any(role in {
             ReferenceRole.SHAPE,
@@ -444,16 +483,26 @@ def _select_reference(
             ReferenceRole.MATERIAL,
             ReferenceRole.PALETTE,
         } for role in reference.roles):
+            row["reason_code"] = "no-usable-role"
+            row["reason"] = "carries no shape/pixel_style/material/palette role"
             continue
         try:
             loaded = Image.open(reference.path).convert("RGBA")
         except (OSError, ValueError):
+            row["reason_code"] = "unreadable"
+            row["reason"] = "the image could not be read from %s" % reference.path
             continue
+        row["readable"] = True
         image = loaded
         scoring_image = loaded
         mode = "exact"
         if loaded.size != (width, height):
             if loaded.height != height or loaded.width >= width or width % max(loaded.width, 1) != 0:
+                row["reason_code"] = "size-mismatch"
+                row["reason"] = (
+                    "size %dx%d is neither the %dx%d canvas nor a horizontal face strip of it"
+                    % (loaded.width, loaded.height, width, height)
+                )
                 continue
             scoring_image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
             for left in range(0, width, loaded.width):
@@ -467,12 +516,139 @@ def _select_reference(
             role_score += 2
         if ReferenceRole.MATERIAL in reference.roles:
             role_score += 1
-        score = (overlap if overlap is not None else 0.0) * 100.0 + role_score
-        candidates.append((score, -index, image, reference, mode))
-    if not candidates:
+        row.update({
+            "eligible": True,
+            "reason_code": "eligible",
+            "reason": "eligible",
+            "mode": mode,
+            "alpha_overlap": None if overlap is None else round(overlap, 4),
+            "role_score": role_score,
+            "score": round((overlap if overlap is not None else 0.0) * 100.0 + role_score, 4),
+            "image": image,
+        })
+    return rows
+
+
+def _selection_step(rows: list[dict[str, object]]) -> tuple[str, str]:
+    """Name the exact step at which reference selection stopped, and its fix.
+
+    "No reference was used" is not a diagnosis. Every real failure is one of
+    three, and they are fixed in different places: nothing was offered (the
+    caller's list is empty), nothing offered could be read (the files are gone,
+    or the reference directory never resolved), or everything readable was the
+    wrong shape or carried the wrong role. Saying which one it was is the
+    difference between a two-minute fix and a re-run with more logging.
+    """
+    if not rows:
+        return (
+            "no-references-offered",
+            "the plan and the router supplied no reference at all: set a reference "
+            "directory (--source / the project's settings) and re-run evidence, or "
+            "attach references to the plan",
+        )
+    readable = [row for row in rows if row["readable"]]
+    if not readable:
+        return (
+            "no-candidate-readable",
+            "every offered reference was unreadable, so nothing could be sampled: "
+            + "; ".join("%s (%s)" % (row["name"], row["reason"]) for row in rows),
+        )
+    eligible = [row for row in rows if row["eligible"]]
+    if not eligible:
+        return (
+            "no-candidate-fit",
+            "references were readable but none fitted this canvas or carried a usable "
+            "role: "
+            + "; ".join("%s -> %s" % (row["name"], row["reason"]) for row in rows),
+        )
+    return ("chosen", "")
+
+
+def reference_selection_report(
+    references: list[ReferenceAsset] | None,
+    width: int,
+    height: int,
+    target_mask: Image.Image | None = None,
+) -> dict[str, object]:
+    """Say which reference this canvas will actually be painted from, and why.
+
+    ``chosen`` is the reference the renderer will load; every other entry is
+    printed with the number that beat it or the rule that excluded it. When no
+    reference qualifies, ``step`` names the step that broke -- nothing offered,
+    nothing readable, or nothing that fits -- so a wrong-looking asset can be
+    traced to a missing reference directory, a jar that would not open, or a
+    candidate of the wrong size, instead of being blamed on the palette.
+    """
+    rows = _reference_candidates(references, width, height, target_mask)
+    eligible = [row for row in rows if row["eligible"]]
+    chosen: dict[str, object] | None = None
+    if eligible:
+        winner = max(
+            eligible,
+            key=lambda row: (float(row["score"]), -int(row["order"])),
+        )
+        chosen = {
+            "name": winner["name"],
+            "path": winner["path"],
+            "roles": winner["roles"],
+            "mode": winner["mode"],
+            "alpha_overlap": winner["alpha_overlap"],
+            "role_score": winner["role_score"],
+            "score": winner["score"],
+        }
+        chosen["why"] = (
+            "highest score (alpha overlap %s x 100 + role weight %s); %d other candidate(s) were scored lower"
+            % (
+                "n/a" if winner["alpha_overlap"] is None else winner["alpha_overlap"],
+                winner["role_score"],
+                len(eligible) - 1,
+            )
+        )
+    step, step_detail = _selection_step(rows)
+    reason = str(chosen["why"]) if chosen is not None else step_detail
+    printable = [
+        {key: value for key, value in row.items() if key != "image"}
+        for row in sorted(
+            rows,
+            key=lambda row: (not row["eligible"], -float(row["score"]), int(row["order"])),
+        )
+    ]
+    return {
+        "canvas": [width, height],
+        "chosen": chosen,
+        "step": step,
+        "step_detail": step_detail,
+        "counts": {
+            "offered": len(rows),
+            "readable": sum(1 for row in rows if row["readable"]),
+            "eligible": len(eligible),
+        },
+        "candidates": printable,
+        "reason": reason,
+    }
+
+
+def _select_reference(
+    references: list[ReferenceAsset] | None,
+    width: int,
+    height: int,
+    target_mask: Image.Image | None = None,
+) -> tuple[Image.Image, ReferenceAsset, str] | None:
+    """Select the raster belonging to the locked geometry.
+
+    Routing may attach a structural source together with a same-sized local
+    material/motif reference.  Choosing the first material reference makes its
+    pixel bands control unrelated support parts.  Alpha agreement with the
+    approved geometry is a generic disambiguator; roles only break ties.
+    """
+    rows = _reference_candidates(references, width, height, target_mask)
+    eligible = [row for row in rows if row["eligible"]]
+    if not eligible:
         return None
-    _score, _order, image, reference, mode = max(candidates, key=lambda item: (item[0], item[1]))
-    return image, reference, mode
+    winner = max(eligible, key=lambda row: (float(row["score"]), -int(row["order"])))
+    image = winner["image"]
+    assert isinstance(image, Image.Image)
+    return image, (references or [])[int(winner["order"])], str(winner["mode"])
 
 
 def _reference_image(
@@ -1297,8 +1473,8 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                     pattern_noise,
                     rng,
                     continuous=(
-                        sampling_mode == "pattern"
-                        and not discrete_tile
+                        style.shade_mode == "gradient"
+                        or (sampling_mode == "pattern" and not discrete_tile)
                     ),
                 )
                 # A named secondary reference can augment the locked/global
@@ -1626,6 +1802,26 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                     continue
                 token = str(legend[symbol])
                 pixels[x, y] = (*_palette_color(appearance.palette, token), 255)
+
+    # A declared minimum accent deposit is enforced on the finished raster, so
+    # one rule covers every way an accent can arrive -- pixel_map, region rule,
+    # reference overlay or mark. "one or two jarring dots" is exactly a cluster
+    # below the authored minimum; the survivor keeps its colour and the speck
+    # takes the nearest base pixel's, so the material's own grain is not
+    # flattened. This is the repair the author opted into; the gate in
+    # validate_style runs on whatever this leaves behind either way.
+    if appearance.accent_cleanup and appearance.accent_min_cluster > 1:
+        accent, _mode = accent_points(
+            result,
+            accent_colors=appearance.accent_colors,
+            base_colors=declared_base_swatches(appearance),
+            palette=appearance.palette,
+        )
+        if accent:
+            result, _kept, removed = despeckle_accent(
+                result, accent, appearance.accent_min_cluster
+            )
+            pixels = result.load()
 
     output_alpha = (alpha_mask or compiled.mask).convert("L")
     if output_alpha.size != result.size:

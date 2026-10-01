@@ -1,0 +1,149 @@
+{
+  "request": {
+    "query": "example stone: a plain cool grey-blue block face, one material, no accent",
+    "form": "custom",
+    "name": "example_stone",
+    "namespace": "examplepack",
+    "width": 16,
+    "height": 16,
+    "novelty": 0.2,
+    "target_path": null,
+    "shape_policy": "planned",
+    "seed": 11,
+    "pack_format": 15
+  },
+  "descriptor": {
+    "target": "example stone block face",
+    "semantic": "A 16x16 opaque block face: plain cool grey-blue stone, one value ramp, and deliberately no accent colour at all.",
+    "visual_identity": [
+      "16x16 opaque block face, no transparency",
+      "one material: cool grey-blue stone",
+      "no accent colour; the accent budget is zero and must come out zero"
+    ],
+    "parts": [
+      {
+        "id": "face",
+        "meaning": "the whole face",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["stone", "block face"],
+        "contour_intent": "surface"
+      }
+    ],
+    "negative_identities": ["ore", "metal", "moss", "cobblestone"],
+    "orientation": "flat, tiles seamlessly",
+    "reference_strategy": "Pattern-sample vanilla stone through the face's own declared region, so the mottling keeps its full local contrast, then map that value rhythm through this family's cool grey-blue ramp. The silhouette is a full opaque face; only the material changes.",
+    "shape_edit_mode": "appearance_only",
+    "reference_part_map": null,
+    "target_part_map": null
+  },
+  "geometry": {
+    "width": 16,
+    "height": 16,
+    "parts": [
+      {
+        "id": "face",
+        "meaning": "the whole face",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["stone"],
+        "contour_intent": "surface"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "face_mask",
+        "part_id": "face",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [0, 0],
+          "marker": "X",
+          "rows": [
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX"
+          ]
+        },
+        "layer": 0
+      }
+    ],
+    "connections": [],
+    "constraints": [],
+    "uv_regions": [
+      {
+        "id": "face_all",
+        "part_id": "face",
+        "bbox": [0, 0, 16, 16],
+        "face": "all",
+        "required": true,
+        "notes": "one declared region covering the whole face; pattern sampling normalises the source value range inside it, which is what keeps the local contrast instead of collapsing it"
+      }
+    ],
+    "background_transparent": false
+  },
+  "appearance": {
+    "palette": {
+      "stone_1": "#39404D",
+      "stone_2": "#474F5F",
+      "stone_3": "#576073",
+      "stone_4": "#6A7488",
+      "stone_5": "#808A9E"
+    },
+    "parts": {
+      "face": {
+        "colors": ["stone_1", "stone_2", "stone_3", "stone_4", "stone_5"],
+        "material": "stone",
+        "shade_axis": "none",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": [],
+        "shade_mode": "bands"
+      }
+    },
+    "outline_color": null,
+    "outline_width": 0,
+    "transparent_background": false,
+    "reference_sampling": "pattern",
+    "region_rules": [],
+    "part_reference_sampling": {
+      "face": "pattern"
+    },
+    "part_reference_sources": {
+      "face": "stone"
+    },
+    "part_reference_composite": {},
+    "motif_policy": "model_authored",
+    "accent_budget": 0,
+    "accent_colors": [],
+    "band_maximum_isolated": 0.1,
+    "band_maximum_step": 30
+  },
+  "references": [
+    {
+      "path": "../refs/stone.png",
+      "name": "stone",
+      "roles": ["shape", "material", "pixel_style"],
+      "notes": [
+        "group=minecraft:block/stone",
+        "the whole family is built from this one stone face; the ore reuses this exact reference, palette and sampling mode so its base comes out byte-identical"
+      ]
+    }
+  ]
+}

@@ -17,12 +17,38 @@ survived is the part that was never a model's job.
 
 ```
 bin/mc-art          the whole tool surface
-mc_art/             the engine (17 modules, Pillow + stdlib)
-examples/           a working plan to start from
+mc_art/             the engine (22 modules, Pillow + stdlib)
+examples/           working plans to start from; example_family/ is a whole
+                    family plus the script that builds and re-measures it
 layouts/            shipped vanilla UV layouts
 scripts/            magnify / review_family / continuity
-tests/              60 tests over the engine
+tests/              168 tests over the engine
 ```
+
+## Who decides: you, or the engine
+
+The single most expensive mistake this skill has made is letting a script guess
+at something only the eye can answer, and then blaming the script when the art
+came out wrong. The split below is a contract, not a preference.
+
+| decision | owner | why |
+|---|---|---|
+| what the asset *is*; which object it must read as | **you** | no statistic knows that a lectern is not a table |
+| which reference to learn from, and in what role | **you** (engine scores the candidates) | the engine can rank them; only you can say "the deep variant, not the shallow one" |
+| silhouette: keep, edit locally, or redraw | **you** (`shape_edit_mode`) | the engine only enforces what you declared |
+| palette hue, ramp order, accent hue | **you** | it is the answer to the brief |
+| composition, marks, `pixel_map` rows | **you** | placement is art |
+| whether the render is any good | **you**, by reading the PNG | numbers lie in both directions |
+| where the accent pixels ended up; how many | **engine** (`audit`, `style_report.json`) | counting is not judgement |
+| whether the accent budget you declared was respected | **engine** (`validate_style`) | a budget you assert beats a budget you intend |
+| whether the family shares one hue and one accent | **engine** (`audit --family`) | this is arithmetic on delivered pixels |
+| which reference the renderer actually loaded | **engine** (`why-reference`, `reference_selection.json`) | the answer must be the same computation that chose |
+| alpha conformance to a locked contour | **engine** | exactness is not a matter of taste |
+
+If you catch yourself writing a script to decide a *taste* question, stop: that
+is you making the decision through a script, and it will not generalise past
+the asset you were looking at. Write the decision into the plan and let the
+engine execute it.
 
 ## The loop
 
@@ -46,8 +72,19 @@ $M render --plan my.plan.json --out outputs/mine
 
 # 5. LOOK at outputs/mine/sprite.png — then go back to 4
 #
+# 5b. MEASURE what you delivered (not what you intended):
+#    $M audit outputs/mine/sprite.png --accent-color '#F2C070' --accent-budget 36
+#    $M audit outputs/*/sprite.png --family --accent-color '#F2C070'   # one family?
+#    $M why-reference --plan my.plan.json                              # why THAT source?
+#
 # 6. For an asset whose faces differ (a log, a machine, a plant), assemble it:
 #    $M pack --manifest pack.json --out pack/     see "Traps" #3
+#
+# 6b. For a BLOCK ENTITY (a desk with a sheet on it, a lectern, an altar) the
+#     block is several boxes with per-face UVs, not a recoloured plank:
+#    $M block --spec desk.json --out pack/ --render look/desk.png --view front34
+#    A face with no `uv` on a partial box samples the WHOLE texture; the audit
+#    refuses that before it ever renders.
 #
 # 7. For an ENTITY: one description, two branches. See "Entities", below.
 #    Branch A -- the model exists:
@@ -94,6 +131,123 @@ Two levers decide most outcomes:
 
 `reference_sampling` sets the default; `part_reference_sampling` overrides per
 part, and `part_reference_sources` binds a part to one named reference.
+
+## Ramp, line and family: the declarations that turn a complaint into a check
+
+Four things people keep having to point at by hand. Each one has a key you can
+write and a number the engine reports back, so "it looks like dots" becomes a
+verdict instead of an argument.
+
+### 1. A ramp, not equal-value scatter
+
+```json
+"parts": {"face": {"colors": ["deep_1","deep_2","deep_3","deep_4","deep_5"],
+                   "shade_mode": "gradient",
+                   "shade_axis": "top_left_to_bottom_right"}},
+"band_maximum_isolated": 0.05
+```
+
+- `shade_mode: "bands"` (default) snaps every pixel to one authored swatch —
+  that is what gives vanilla its pixel-art value steps.
+- `shade_mode: "gradient"` interpolates continuously between them. Use it for a
+  rounded solid (a lump, a gem, a metal body); keep `bands` for a tiled surface.
+- **Contrast collapses without a region.** `pattern` sampling of a same-size
+  reference normalises the source's value range *inside a declared UV region*.
+  With no region it uses absolute source luma, and a grey-stone tile ends up
+  using two of your five swatches (measured on a real asset: luma std-dev 5.6
+  against deepslate's 21.1). Declare one region covering the face —
+  `"uv_regions": [{"id":"face_all","part_id":"face","bbox":[0,0,16,16],"face":"all"}]`
+  — and the whole ramp comes back.
+- `band_maximum_isolated` is the gate: the share of opaque pixels allowed to
+  differ from *every* in-mask neighbour by more than 24 luma. A smooth ramp
+  scores 0; a flat fill with a few bright pixels scores their share.
+
+### 2. Accent is a budget, and the engine counts it
+
+| key | what it says |
+|---|---|
+| `accent_colors` | which swatches *are* the accent (hex or palette tokens). Omit and the engine infers it: saturated pixels outside the sprite's own hue |
+| `accent_budget` | the most accent pixels this sprite may spend. **A plain block declares `0`** |
+| `accent_min_cluster` | the smallest accent deposit accepted, in pixels. A gate: it reports, it does not fix |
+| `accent_cleanup` | `true` also *repairs*: undersized clusters are repainted with the nearest base pixel before the PNG is written. Off by default — silently rewriting a delivered pixel is not the engine's call |
+| `accent_edge_max` | the most luma the accent may jump by where it meets the material. This is "橙色和蓝色的边缘要拖突兀有多突兀", as a number |
+| `band_maximum_isolated` | see above |
+
+```bash
+$M audit outputs/example_ore/sprite.png \
+    --accent-color '#F2C070' --accent-color '#8E5C1C' --accent-budget 36 --min-cluster 3
+#   accent  -> 32 pixel(s) (declared) at hue 34.4 deg, mean value 156.0, in 4 cluster(s)  smallest=8  below_min=0
+#   edge    -> mean=12.19 p90=26.72 (limit None)
+```
+
+A budget of zero is the whole point of the plain-block rule: it cannot be
+satisfied by taste, only by having no accent pixels at all.
+
+### 3. One family is one material axis *and* one accent axis
+
+```bash
+$M audit outputs/example_{stone,deepslate,ore,raw_ore,ingot}/sprite.png \
+    --family --accent-color '#F0BE6E'
+# family: hue_span=6.4 deg  value_span=41.46  chroma_span=13.65  accent_hue_span=0.1 deg (3 member(s) carry an accent)  -> consistent
+```
+
+- The **material axes** (hue span, value span, chroma span) are measured with
+  accent pixels *removed*, so a warm highlight line does not count as drift.
+- The **accent axis** is measured across the members that carry an accent. One
+  member with an orange seam and another with a cyan seam is the real "你能看出
+  两个本来是一个东西的吗" failure, and a base-only test cannot see it.
+- Thresholds are yours: `--max-hue-span`, `--max-value-span`,
+  `--max-accent-hue-span`. The defaults (26° / 56 / 14°) pass vanilla stone →
+  deepslate, which is the bar that matters.
+- **A palette-histogram overlap is not the bar.** Two unrelated materials share
+  a great many quantised colours; `family_consistency` can pass a pair this test
+  fails. Use `family_consistency` for frame-to-frame drift within one object and
+  `audit --family` for "are these one material".
+
+### 4. "Why did it use *that* reference?"
+
+```bash
+$M why-reference --plan my.plan.json
+# CHOSEN -> deepslate [shape,material,pixel_style] mode=exact score=300.0
+# WHY    -> highest score (alpha overlap 1.0 x 100 + role weight 3); 1 other candidate(s) were scored lower
+# CANDIDATES ->
+#   deepslate      shape,material,pixel_style  score=300.0    eligible (alpha_overlap=1.0)
+#   stone          shape                       score=300.0    eligible (alpha_overlap=1.0)
+```
+
+The renderer writes the same table to `reference_selection.json` on every run,
+including the candidates it rejected and the rule that rejected each one. The
+report is not a second opinion computed beside the renderer — it *is* the
+selection computation, so "it referenced the shallow stone instead of the deep
+one" is answerable from the output directory rather than by re-running with
+extra logging.
+
+### 5. A block entity is boxes and UVs, not a recoloured plank
+
+A desk with a sheet of paper on it is not a plank texture with a lighter
+rectangle. It is several boxes, each face sampling its own rectangle of a
+texture painted for that face:
+
+```json
+{"name": "example_desk", "namespace": "examplepack",
+ "textures": {"wood": "example_planks.png", "paper": "example_paper.png"},
+ "elements": [
+   {"id": "top",   "from": [0,13,0], "to": [16,16,16], "faces": {"up": {"texture":"wood","uv":[0,0,16,16]}, "...": {}}},
+   {"id": "sheet", "from": [2,16,3], "to": [14,16,13], "faces": {"up": {"texture":"paper","uv":[0,0,12,10]}}}
+ ]}
+```
+
+```bash
+$M block --spec desk.json --out pack/ --render look/desk.png --view front34 --view side
+```
+
+The audit refuses, per face: a **missing `uv` on a partial box** (that face would
+inherit the whole texture, which is exactly how a sheet of paper comes out as
+stretched planks), a `uv` **outside** its texture, and a `uv` whose rectangle is
+**not the shape of the face it is mapped onto**. One block unit is one texel at
+16x16, so "is this UV stretched?" has an exact answer with no object knowledge.
+Then `--render` draws the emitted model through the game's own camera, because
+the numbers passing is not the same as the desk looking like a desk.
 
 ## After every render: look at the image
 
@@ -570,8 +724,26 @@ settled it:
 | soil / dirt | coarse + debris | brighter, more saturated | a few |
 | ore | inherits the stone base | — | the bright cluster, and the only one |
 
-Assert it rather than intend it: count accent pixels per sprite and check the
-plain blocks are at zero. That check is what keeps "quiet" from drifting back.
+Assert it rather than intend it. This is no longer advice: declare
+`"accent_budget": 0` on the plain blocks and `"accent_colors"` on the ones that
+carry an accent, and `validate_style` fails the render if the budget is
+breached. Measured on `examples/example_family`: stone and deepslate **0/0**,
+ore **32/36**, raw ore **16/20**, ingot **16/16**. That check is what keeps
+"quiet" from drifting back.
+
+Two more, learned from the same rounds and now measurable:
+
+- **The accent has to be one hue across the family.** The complaint was not
+  that the ore had specks; it was that the orange and the blue could not be
+  recognised as the same object. `audit --family` reports the accent-hue arc
+  separately from the material axes, and the example family measures 0.1° across
+  its three accented members.
+- **Give the accent a rim, not just a core.** Every boundary pixel of a deposit
+  should be the *darkest* tone, with the bright core strictly inside. A bright
+  core that touches the base material is the harsh edge people describe as
+  "突兀", and `accent_edge_max` is the number that catches it: the family's
+  deposits measure a p90 luma step of 19–36 against a limit of 60, while the
+  same deposit painted flat measures 137.
 
 **2. A block's hue belongs to its biome, not to its source texture.** Grey
 stone among red blocks reads as a hole in the terrain, however good the vanilla

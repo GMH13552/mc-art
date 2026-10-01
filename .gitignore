@@ -3,7 +3,16 @@
 # Content-addressed, so the same jar reproduces the same blob paths.
 references/
 
+# Minecraft's own textures, pulled from a game jar by examples/example_family
+# and examples/**/refs. They are Mojang's art and must not be redistributed.
+examples/**/refs/
+examples/**/out/
+examples/**/textures/
+
 # Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Local pytest scratch (the machine's %TEMP% can be unusable for a fresh user)
+.pytest-tmp/

@@ -1,0 +1,150 @@
+{
+  "request": {
+    "query": "example deepslate: the same rock, deeper and darker, still one family",
+    "form": "custom",
+    "name": "example_deepslate",
+    "namespace": "examplepack",
+    "width": 16,
+    "height": 16,
+    "novelty": 0.2,
+    "target_path": null,
+    "shape_policy": "planned",
+    "seed": 12,
+    "pack_format": 15
+  },
+  "descriptor": {
+    "target": "example deepslate block face",
+    "semantic": "A 16x16 opaque block face: the deeper, darker member of the same rock family, keeping the layered banding and the cool hue.",
+    "visual_identity": [
+      "16x16 opaque block face, no transparency",
+      "same hue axis as example_stone, lower on the value axis",
+      "layered banding with real internal contrast",
+      "no accent colour"
+    ],
+    "parts": [
+      {
+        "id": "face",
+        "meaning": "the whole face",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["deepslate", "stone", "block face"],
+        "contour_intent": "surface"
+      }
+    ],
+    "negative_identities": ["ore", "blackstone", "coal", "surface stone"],
+    "orientation": "flat, tiles seamlessly",
+    "reference_strategy": "Pattern-sample vanilla deepslate through the face's declared region so its layered banding survives at full contrast, then push the whole ramp down the value axis while keeping the same cool hue as example_stone. A deep variant is a value change, never a hue change.",
+    "shape_edit_mode": "appearance_only",
+    "reference_part_map": null,
+    "target_part_map": null
+  },
+  "geometry": {
+    "width": 16,
+    "height": 16,
+    "parts": [
+      {
+        "id": "face",
+        "meaning": "the whole face",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["deepslate"],
+        "contour_intent": "surface"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "face_mask",
+        "part_id": "face",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [0, 0],
+          "marker": "X",
+          "rows": [
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXX"
+          ]
+        },
+        "layer": 0
+      }
+    ],
+    "connections": [],
+    "constraints": [],
+    "uv_regions": [
+      {
+        "id": "face_all",
+        "part_id": "face",
+        "bbox": [0, 0, 16, 16],
+        "face": "all",
+        "required": true,
+        "notes": "one declared region; the source's layered banding is normalised inside it"
+      }
+    ],
+    "background_transparent": false
+  },
+  "appearance": {
+    "palette": {
+      "deep_1": "#242830",
+      "deep_2": "#30353F",
+      "deep_3": "#3E444F",
+      "deep_4": "#4F5763",
+      "deep_5": "#646D7C"
+    },
+    "parts": {
+      "face": {
+        "colors": ["deep_1", "deep_2", "deep_3", "deep_4", "deep_5"],
+        "material": "stone",
+        "shade_axis": "none",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": [],
+        "shade_mode": "bands"
+      }
+    },
+    "outline_color": null,
+    "outline_width": 0,
+    "transparent_background": false,
+    "reference_sampling": "pattern",
+    "region_rules": [],
+    "part_reference_sampling": {
+      "face": "pattern"
+    },
+    "part_reference_sources": {
+      "face": "deepslate"
+    },
+    "part_reference_composite": {},
+    "motif_policy": "model_authored",
+    "accent_budget": 0,
+    "accent_colors": [],
+    "band_maximum_isolated": 0.1,
+    "band_maximum_step": 30
+  },
+  "references": [
+    {
+      "path": "../refs/deepslate.png",
+      "name": "deepslate",
+      "roles": ["shape", "material", "pixel_style"],
+      "notes": [
+        "group=minecraft:block/deepslate",
+        "the deep member of the family: layered banding, same cool hue, lower value"
+      ]
+    }
+  ]
+}

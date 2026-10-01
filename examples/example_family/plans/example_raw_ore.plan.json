@@ -1,0 +1,160 @@
+{
+  "request": {
+    "query": "example raw ore: a rough lump of the same rock, smooth-shaded, with two deposits",
+    "form": "item",
+    "name": "example_raw_ore",
+    "namespace": "examplepack",
+    "width": 16,
+    "height": 16,
+    "novelty": 0.4,
+    "target_path": null,
+    "shape_policy": "planned",
+    "seed": 13,
+    "pack_format": 15
+  },
+  "descriptor": {
+    "target": "example raw ore item",
+    "semantic": "A 16x16 item sprite: a rough lump of the family's rock with two star-metal deposits. The body is shaded as one continuous ramp rather than flat swatches, because a lump is a rounded solid, not a patterned surface.",
+    "visual_identity": [
+      "16x16 transparent-background item sprite",
+      "rough compact lump, lit from the upper left",
+      "a continuous value ramp across the body, not equal-value blocks",
+      "two deposits with an internal light core and dark rim"
+    ],
+    "parts": [
+      {
+        "id": "lump",
+        "meaning": "the whole lump",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["lump", "chunk", "raw ore"],
+        "contour_intent": "compact"
+      }
+    ],
+    "negative_identities": ["ingot", "bar", "gem", "tool"],
+    "orientation": "centered, lit from the upper left",
+    "reference_strategy": "No reference: this is a new contour. The body is one authored ramp sampled continuously along the upper-left diagonal, so the lump reads as a rounded solid; the deposits are the only saturated pixels and are declared as the accent with a budget and a minimum cluster size.",
+    "shape_edit_mode": "new_silhouette",
+    "reference_part_map": null,
+    "target_part_map": null
+  },
+  "geometry": {
+    "width": 16,
+    "height": 16,
+    "parts": [
+      {
+        "id": "lump",
+        "meaning": "the whole lump",
+        "required": true,
+        "paint_only": false,
+        "layer": 0,
+        "style_role": "silhouette support",
+        "recognition_terms": ["lump"],
+        "contour_intent": "compact"
+      }
+    ],
+    "primitives": [
+      {
+        "id": "lump_mask",
+        "part_id": "lump",
+        "primitive": "custom_mask",
+        "params": {
+          "offset": [0, 0],
+          "marker": "X",
+          "rows": [
+            "................",
+            ".....XXXX.......",
+            "...XXXXXXX......",
+            "..XXXXXXXXXX....",
+            ".XXXXXXXXXXXX...",
+            ".XXXXXXXXXXXXX..",
+            "XXXXXXXXXXXXXX..",
+            "XXXXXXXXXXXXXXX.",
+            "XXXXXXXXXXXXXXX.",
+            ".XXXXXXXXXXXXXX.",
+            "..XXXXXXXXXXXX..",
+            "...XXXXXXXXXX...",
+            "....XXXXXXXX....",
+            ".....XXXXXX.....",
+            "......XXXX......",
+            "................"
+          ]
+        },
+        "layer": 0
+      }
+    ],
+    "connections": [],
+    "constraints": [],
+    "uv_regions": [],
+    "background_transparent": true
+  },
+  "appearance": {
+    "palette": {
+      "rock_1": "#39404D",
+      "rock_2": "#474F5F",
+      "rock_3": "#576073",
+      "rock_4": "#6A7488",
+      "rock_5": "#808A9E",
+      "star_core": "#FFE3B0",
+      "star_light": "#F0BE6E",
+      "star_mid": "#CF9440",
+      "star_rim": "#8E5C1C"
+    },
+    "parts": {
+      "lump": {
+        "colors": ["rock_1", "rock_2", "rock_3", "rock_4", "rock_5"],
+        "material": "stone",
+        "shade_axis": "top_left_to_bottom_right",
+        "noise": 0.0,
+        "highlight_ratio": 0.0,
+        "marks": [],
+        "shade_mode": "gradient"
+      }
+    },
+    "outline_color": null,
+    "outline_width": 0,
+    "transparent_background": true,
+    "reference_sampling": "none",
+    "region_rules": [],
+    "part_reference_sampling": {},
+    "part_reference_sources": {},
+    "part_reference_composite": {},
+    "motif_policy": "model_authored",
+    "accent_colors": ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"],
+    "accent_budget": 20,
+    "accent_min_cluster": 3,
+    "accent_cleanup": true,
+    "accent_edge_max": 60,
+    "band_maximum_isolated": 0.1,
+    "band_maximum_step": 30,
+    "pixel_map": {
+      "legend": {
+        "1": "#FFE3B0",
+        "2": "#F0BE6E",
+        "3": "#CF9440",
+        "4": "#8E5C1C"
+      },
+      "rows": [
+        "................",
+        "................",
+        "................",
+        "................",
+        ".....44.........",
+        "....4234........",
+        ".....44.........",
+        "................",
+        "..........44....",
+        ".........4234...",
+        "..........44....",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
+    }
+  },
+  "references": []
+}

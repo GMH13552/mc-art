@@ -344,3 +344,10 @@ from .metrics import (  # noqa: E402
     sprite_palette_profile,
     sprite_palette_ramp,
 )
+from .style import (  # noqa: E402
+    accent_audit,
+    band_report,
+    despeckle_accent,
+    family_axes,
+    sprite_axes,
+)

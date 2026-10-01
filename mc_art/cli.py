@@ -323,7 +323,191 @@ def _render(args: argparse.Namespace) -> int:
     print("VALIDATION -> %s" % ("passed" if result.validation.passed else "FAILED"))
     for error in list(result.validation.errors)[:5]:
         print("  error: %s" % error)
+    style = result.validation.metrics
+    if "style.accent_pixels" in style:
+        budget = style.get("style.accent_budget", -1)
+        print("STYLE -> accent=%s/%s band=%s isolated=%.2f%% edge_p90=%s (%s)" % (
+            style.get("style.accent_pixels"),
+            "unchecked" if budget == -1 else budget,
+            style.get("style.band_count"),
+            float(style.get("style.band_isolated_share", 0.0)) * 100.0,
+            style.get("style.accent_edge_delta_p90"),
+            style.get("style.band_verdict"),
+        ))
+    report_path = Path(args.out) / "reference_selection.json"
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            report = {}
+        chosen = report.get("chosen") or {}
+        if chosen:
+            print("REFERENCE -> %s (%s) because %s" % (
+                chosen.get("name"), chosen.get("mode"), report.get("reason")))
+        else:
+            print("REFERENCE -> none used, at step '%s': %s" % (
+                report.get("step"), report.get("step_detail")))
     return 0 if result.sprite_path and result.validation.passed else 1
+
+
+def _why_reference(args: argparse.Namespace) -> int:
+    """Say which reference will paint this canvas, and what the others scored.
+
+    "深渊原石参考的是浅层原石" is a question about the selection, so the answer is
+    the selection's own candidate table -- including the entries that were
+    rejected, and the rule that rejected them.
+    """
+    from .appearance import reference_selection_report
+    from .geometry import compile_geometry
+
+    plan = plan_from_file(args.plan)
+    mask = None
+    try:
+        mask = compile_geometry(plan.geometry).mask
+    except (KeyError, TypeError, ValueError):
+        mask = None
+    report = reference_selection_report(
+        plan.references, plan.request.width, plan.request.height, target_mask=mask
+    )
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+    print("CANVAS -> %dx%d" % (report["canvas"][0], report["canvas"][1]))
+    counts = report.get("counts") or {}
+    print("OFFERED -> %s; READABLE -> %s; ELIGIBLE -> %s" % (
+        counts.get("offered"), counts.get("readable"), counts.get("eligible")))
+    chosen = report.get("chosen")
+    print("CHOSEN -> %s" % (
+        "%s [%s] mode=%s score=%s" % (
+            chosen["name"], ",".join(chosen["roles"]), chosen["mode"], chosen["score"])
+        if chosen else "nothing usable"))
+    print("STEP   -> %s" % report.get("step"))
+    print("WHY    -> %s" % report["reason"])
+    print("CANDIDATES ->")
+    for row in report["candidates"]:
+        print("  %-28s %-24s score=%-8s %s" % (
+            row["name"],
+            ",".join(row["roles"]) or "-",
+            row["score"],
+            row["reason"] if not row["eligible"] else "eligible (alpha_overlap=%s)" % row["alpha_overlap"],
+        ))
+    return 0
+
+
+def _audit(args: argparse.Namespace) -> int:
+    """Measure what a rendered sprite actually came out like, and gate on it.
+
+    Every number here is an answer to something a person said by hand:
+    "不能是这么难看的点点" is the accent cluster sizes, "突兀的来一两个点" is the
+    budget and the isolated-pixel share, "橙色和蓝色的边缘要拖突兀有多突兀" is the
+    accent-to-base step, and "你能看出两个本来是一个东西的吗" is the family axis
+    span. Nothing is judged unless the caller declares the budget.
+    """
+    from .style import accent_audit, band_report, family_axes, family_axes_summary
+
+    accent_colors = list(args.accent_color or [])
+    base_colors = list(args.base_color or [])
+    audit = {
+        "accent_colors": accent_colors,
+        "base_colors": base_colors,
+        "accent_budget": args.accent_budget,
+        "minimum_cluster": args.min_cluster,
+        "accent_edge_max": args.accent_edge_max,
+        "band_maximum_isolated": args.max_isolated,
+        "band_maximum_step": args.max_step,
+        "sprites": [
+            {
+                "bands": band_report(
+                    sprite, maximum_isolated=args.max_isolated, maximum_step=args.max_step
+                ),
+                "accent": accent_audit(
+                    sprite,
+                    accent_colors=accent_colors,
+                    base_colors=base_colors,
+                    budget=args.accent_budget,
+                    minimum_cluster=args.min_cluster,
+                    edge_max=args.accent_edge_max,
+                ),
+            }
+            for sprite in args.sprites
+        ],
+    }
+    if len(args.sprites) > 1:
+        audit["family"] = family_axes(
+            args.sprites,
+            accent_colors=accent_colors,
+            base_colors=base_colors,
+            maximum_hue_span_deg=args.max_hue_span,
+            maximum_luma_span=args.max_value_span,
+            maximum_accent_hue_span_deg=args.max_accent_hue_span,
+        )
+    if args.json:
+        print(json.dumps(audit, ensure_ascii=False, indent=2))
+    else:
+        for sprite, row in zip(args.sprites, audit["sprites"]):
+            bands, accent = row["bands"], row["accent"]
+            print("%s" % sprite)
+            print("  bands   -> %d band(s)  largest_flat=%.0f%%  isolated=%.2f%%  step=%.1f  %s" % (
+                bands["band_count"], bands["largest_flat_share"] * 100.0,
+                bands["isolated_share"] * 100.0, bands["mean_neighbour_step"], bands["verdict"]))
+            print("  accent  -> %d pixel(s) (%s) at hue %s deg, mean value %s, in %d cluster(s)  smallest=%d  below_min=%d" % (
+                accent["accent_pixels"], accent["detection"], accent["accent_hue_degrees"],
+                accent["accent_luma_mean"], accent["clusters"],
+                accent["smallest_cluster"], accent["below_minimum_pixels"]))
+            print("  edge    -> mean=%s p90=%s (limit %s)" % (
+                accent["edge_delta_mean"], accent["edge_delta_p90"], accent["edge_max"]))
+            for reason in accent["reasons"]:
+                print("  FAIL    -> %s" % reason)
+            for reason in bands["reasons"]:
+                print("  FAIL    -> %s" % reason)
+        if "family" in audit:
+            print(family_axes_summary(audit["family"]))
+            for reason in audit["family"]["reasons"]:
+                print("  FAIL    -> %s" % reason)
+    failed = any(not row["accent"]["consistent"] for row in audit["sprites"])
+    failed = failed or any(row["bands"].get("consistent") is False for row in audit["sprites"])
+    if "family" in audit and args.family:
+        failed = failed or not audit["family"]["consistent"]
+    return 1 if failed else 0
+
+
+def _block(args: argparse.Namespace) -> int:
+    """Emit a multi-box block model with real per-face UVs, and look at it.
+
+    A block entity -- a desk with a sheet on it, a lectern, an altar -- is not a
+    recoloured plank. This command writes the elements, refuses a face whose UV
+    would stretch a foreign texture across it, and renders the model in the
+    game's own camera so the sheet can be seen to be a sheet.
+    """
+    from .blockmodel import render_block_spec, write_block_model
+
+    spec_path = Path(args.spec)
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    result = write_block_model(
+        spec, args.out, base_dir=spec_path.parent, pack_format=args.pack_format
+    )
+    report = result["report"]
+    print("MODEL    -> %s" % result["model"])
+    print("KIND     -> %s; elements=%d faces=%d; textures=%s" % (
+        report["kind"], report["elements"], report["faces"], ", ".join(report["textures"])))
+    if report["unused_textures"]:
+        print("  NOTE   unused texture(s): %s" % ", ".join(report["unused_textures"]))
+    for row in report["faces_detail"]:
+        print("  %-14s %-6s %-10s uv=%-16s world=%sx%s  %s" % (
+            row["element"], row["face"], row.get("texture"),
+            row.get("uv") or "-", row["world_extent"][0], row["world_extent"][1],
+            row["reason"]))
+    for problem in report["problems"][:12]:
+        print("  PROBLEM %s" % problem)
+    for note in report["notes"][:8]:
+        print("  note    %s" % note)
+    print("UV_MAP   -> %s" % result["uv_map"])
+    if args.render and report["passed"]:
+        views = tuple(args.view or ("front34", "side"))
+        rendered = render_block_spec(spec, args.out, args.render, views=views)
+        print("VIEW     -> %s (%s)" % (rendered["image"], ", ".join(views)))
+    print("VERDICT  %s" % ("PASS" if report["passed"] else "FAIL"))
+    return 0 if report["passed"] else 1
 
 
 def _measure(args: argparse.Namespace) -> int:
@@ -855,6 +1039,54 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--out", required=True)
     render.add_argument("--no-package", action="store_true")
     render.set_defaults(handler=_render)
+
+    why = sub.add_parser(
+        "why-reference",
+        help="say which reference will paint this plan's canvas, and what the other candidates scored")
+    why.add_argument("--plan", required=True)
+    why.add_argument("--json", action="store_true")
+    why.set_defaults(handler=_why_reference)
+
+    audit = sub.add_parser(
+        "audit",
+        help="measure a sprite's value bands, accent spend and family axes; gate on what you declared")
+    audit.add_argument("sprites", nargs="+")
+    audit.add_argument("--accent-color", action="append", metavar="HEX",
+                       help="a swatch that counts as the accent; repeat for several")
+    audit.add_argument("--base-color", action="append", metavar="HEX",
+                       help="a swatch that counts as base material; repeat for several")
+    audit.add_argument("--accent-budget", type=int,
+                       help="most accent pixels allowed; 0 is a valid budget (a plain block)")
+    audit.add_argument("--min-cluster", type=int, default=1,
+                       help="smallest accent deposit accepted, in pixels")
+    audit.add_argument("--accent-edge-max", type=float,
+                       help="largest accepted accent-to-base step (p90, per channel)")
+    audit.add_argument("--max-isolated", type=float,
+                       help="largest accepted share of isolated opaque pixels, 0..1")
+    audit.add_argument("--max-step", type=float,
+                       help="largest accepted mean luma step between adjacent pixels")
+    audit.add_argument("--max-hue-span", type=float, default=26.0,
+                       help="family gate: widest accepted hue arc between members, degrees")
+    audit.add_argument("--max-value-span", type=float, default=56.0,
+                       help="family gate: widest accepted spread of member mean values")
+    audit.add_argument("--max-accent-hue-span", type=float, default=14.0,
+                       help="family gate: widest accepted accent-hue arc between members, degrees")
+    audit.add_argument("--family", action="store_true",
+                       help="also fail when the set's hue/value axes disagree")
+    audit.add_argument("--json", action="store_true")
+    audit.set_defaults(handler=_audit)
+
+    block = sub.add_parser(
+        "block",
+        help="emit a multi-box block model with real per-face UVs, and render it in the game's camera")
+    block.add_argument("--spec", required=True,
+                       help='JSON: {name, namespace, textures:{...}, elements:[{from,to,faces:{...}}]}')
+    block.add_argument("--out", required=True, help="resource-pack directory to write")
+    block.add_argument("--render", metavar="PNG", help="also render the model to this image")
+    block.add_argument("--view", action="append", metavar="NAME",
+                       help="front34 / front / side / back34 / top34; repeat for a strip")
+    block.add_argument("--pack-format", type=int, default=15)
+    block.set_defaults(handler=_block)
 
     layouts = sub.add_parser("layouts", help="list the shipped entity UV layouts so one can be found, not invented")
     layouts.add_argument("--root", help="layouts directory; defaults to the one shipped with this skill")
