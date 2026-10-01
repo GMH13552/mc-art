@@ -131,6 +131,7 @@
     "accent_min_cluster": 3,
     "accent_cleanup": true,
     "accent_edge_max": 90,
+    "threshold_waiver": "this item is a lump of the family's rock with two deposits on it, and its base is raw_iron's own strongly-lit surface, so the accent-to-base step is that surface's contrast (measured 67) rather than a deposit on flat stone. The family reference of 60 assumes a flat block face. Declared so the relaxation is visible rather than silent.",
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30,
     "pixel_map": {

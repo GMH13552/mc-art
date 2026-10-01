@@ -126,11 +126,17 @@
     },
     "part_reference_composite": {},
     "motif_policy": "model_authored",
-    "accent_colors": ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"],
-    "accent_budget": 20,
+    "accent_colors": ["#F0BE6E", "#CF9440", "#8E5C1C"],
+    "accent_budget": 40,
     "accent_min_cluster": 3,
-    "accent_cleanup": true,
+    "accent_cleanup": false,
     "accent_edge_max": 90,
+    "threshold_waiver": "the accent IS this item's own lighting, taken from iron_ingot's brightest pixels, so its edge step is iron_ingot's own contrast (measured 83) rather than an authored deposit's. The family's reference of 60 is calibrated for a deposit on stone; an item whose highlight is its own lit face legitimately exceeds it. Declared here so the relaxation is visible rather than silent.",
+    "accent_from_reference": {
+      "source": "iron_ingot",
+      "brightest_percent": 22,
+      "ramp": ["#F0BE6E", "#DFA855", "#CF9440", "#8E5C1C"]
+    },
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30,
     "pixel_map": {

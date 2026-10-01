@@ -37,6 +37,8 @@ FULL_FACE = [
     "XXXXXXXXXXXXXXXX",
 ] * 16
 
+REFS = Path(__file__).resolve().parents[1] / "examples" / "example_family" / "refs"
+
 
 def _solid(path: Path, colour: tuple[int, int, int, int], size: tuple[int, int] = (16, 16)) -> Path:
     Image.new("RGBA", size, colour).save(path)
@@ -473,7 +475,90 @@ def test_the_motif_gate_fires_on_the_rejected_ore_and_not_on_four_different_shap
     good_audit = style.accent_audit(good, accent_colors=["#F0BE6E", "#8E5C1C"], budget=42)
     assert good_audit["structure"]["motif"]["repeat_max"] <= 2, good_audit["structure"]["motif"]
     assert good_audit["structure"]["motif"]["ok"] is True
-    assert good_audit["consistent"] is True, good_audit["reasons"]
+    # Only the motif rule is under test here; the other structural rules have
+    # their own fixtures below.
+    assert not any("motif repeat" in reason for reason in good_audit["reasons"])
+
+
+# -- the bar rule, and a plan that loosens its own ruler ---------------------
+
+def test_the_bar_gate_fires_on_a_pasted_band_and_passes_a_form_following_highlight(tmp_path: Path) -> None:
+    """The ingot fault, isolated: the accent's outline ignored the form.
+
+    Both fixtures are the same material and the same size; the only difference is
+    whether the highlight's shape comes from the object or from a straight edge
+    drawn across it.
+    """
+    band = [
+        "................", "................", "................", "................",
+        ".....43334......", "....4321234.....", ".....43334......", "................",
+        "................", "................", "................", "................",
+        "................", "................", "................", "................",
+    ]
+    pasted = _paint(tmp_path / "band.png", band, RAMP)
+    audit = style.accent_audit(pasted, accent_colors=["#F0BE6E", "#8E5C1C"], budget=24)
+    shape = audit["structure"]["shape"]
+    assert shape["ok"] is False, shape
+    assert shape["bars"][0]["fill_ratio"] >= 0.75
+    assert shape["bars"][0]["aspect"] >= 1.8
+    assert any("shape is a bar" in reason for reason in audit["reasons"])
+
+    # The delivered sheen: vanilla iron_ingot's own brightest 22%, which steps
+    # down along the ingot's lit face rather than across it.
+    source = Image.open(REFS / "iron_ingot.png").convert("RGBA")
+    ranked = sorted(
+        (
+            (x, y)
+            for y in range(16)
+            for x in range(16)
+            if source.getpixel((x, y))[3] >= 8
+        ),
+        key=lambda point: style.luma(source.getpixel(point)[:3]),
+        reverse=True,
+    )
+    take = max(1, int(round(len(ranked) * 0.22)))
+    rows = [list("." * 16) for _ in range(16)]
+    for index, (x, y) in enumerate(ranked[:take]):
+        rows[y][x] = ("2", "3", "4")[min(2, index * 3 // take)]
+    derived = _paint(tmp_path / "derived.png", ["".join(row) for row in rows], RAMP)
+    derived_audit = style.accent_audit(derived, accent_colors=["#F0BE6E", "#8E5C1C"], budget=40)
+    assert derived_audit["structure"]["shape"]["ok"] is True, derived_audit["structure"]["shape"]
+
+
+def test_a_relaxed_limit_that_only_the_relaxation_lets_pass_is_reported() -> None:
+    from mc_art.contracts import AppearanceSpec
+    from mc_art.validation import validate_declared_limits
+
+    metrics = {"style.accent_edge_delta_p90": 83.24}
+
+    # Relaxed AND only passing because of it -> an error, not a pass.
+    relaxed = AppearanceSpec(
+        palette={"base": "#3C424E"},
+        parts={"face": PartAppearance(colors=["base"])},
+        accent_edge_max=90,
+    )
+    result = validate_declared_limits(relaxed, metrics)
+    assert result.passed is False
+    assert "DECLARED LIMIT RELAXED" in result.errors[0]
+    assert "declared 90" in result.errors[0]
+    assert "engine reference 60" in result.errors[0]
+    assert "83.24" in result.errors[0]
+
+    # The same relaxation, with a reason -> allowed, still reported.
+    waived = AppearanceSpec(
+        palette={"base": "#3C424E"},
+        parts={"face": PartAppearance(colors=["base"])},
+        accent_edge_max=90,
+        threshold_waiver="the accent is the reference's own lighting",
+    )
+    waived_result = validate_declared_limits(waived, metrics)
+    assert waived_result.passed is True
+    assert any("DECLARED LIMIT RELAXED" in warning for warning in waived_result.warnings)
+
+    # Relaxed but comfortably meeting the engine's value -> nothing to say.
+    quiet = validate_declared_limits(relaxed, {"style.accent_edge_delta_p90": 12.0})
+    assert quiet.passed is True
+    assert quiet.metrics["relaxed_limits"] == 0
 
 
 def test_the_layout_gate_catches_an_even_grid_of_four_different_motifs(tmp_path: Path) -> None:

@@ -430,6 +430,25 @@ class AppearanceSpec:
     accent_ramp_min_levels: int | None = 3
     accent_ramp_max_dominant_share: float | None = 0.6
     accent_ramp_min_monotone: float | None = 0.6
+    # A bar: an accent cluster that fills its bounding box and is elongated, so
+    # its outline has nothing to do with the object it sits on. Not "rectangles
+    # are forbidden" -- a compact 2x2 or a diamond is fine -- but "an accent
+    # whose shape ignores the form it lies on was pasted on".
+    accent_bar_fill_max: float | None = 0.75
+    accent_bar_min_aspect: float | None = 1.8
+    accent_bar_min_pixels: int | None = 10
+    # Where the accent comes from. When set, the accent is not authored pixels at
+    # all: the engine takes the brightest ``brightest_percent`` of the named
+    # reference's own luminance inside the mask and maps them, brightest first,
+    # down the ``ramp`` colours. That is how a highlight ends up following the
+    # form -- because it *is* the form's own lighting.
+    #
+    #   "accent_from_reference": {"source": "iron_ingot", "brightest_percent": 22,
+    #                             "ramp": ["#F0BE6E", "#CF9440", "#8E5C1C"]}
+    accent_from_reference: dict[str, Any] | None = None
+    # A reason, when this plan deliberately declares a limit LOOSER than the
+    # engine's reference values. Allowed -- but never silent.
+    threshold_waiver: str = ""
 
     def __post_init__(self) -> None:
         if self.outline_width not in {0, 1}:
@@ -462,6 +481,19 @@ class AppearanceSpec:
             raise ValueError("accent_ramp_max_dominant_share must be within 0..1, or null for unchecked")
         if self.accent_ramp_min_monotone is not None and not 0.0 <= self.accent_ramp_min_monotone <= 1.0:
             raise ValueError("accent_ramp_min_monotone must be within 0..1, or null for unchecked")
+        if self.accent_bar_fill_max is not None and not 0.0 <= self.accent_bar_fill_max <= 1.0:
+            raise ValueError("accent_bar_fill_max must be within 0..1, or null for unchecked")
+        if self.accent_bar_min_aspect is not None and self.accent_bar_min_aspect < 1.0:
+            raise ValueError("accent_bar_min_aspect must be at least 1, or null for unchecked")
+        if self.accent_from_reference is not None:
+            if not isinstance(self.accent_from_reference, dict):
+                raise ValueError("accent_from_reference must be an object or null")
+            source = str(self.accent_from_reference.get("source", "")).strip()
+            ramp = self.accent_from_reference.get("ramp") or []
+            if not source:
+                raise ValueError("accent_from_reference needs a source reference name")
+            if not isinstance(ramp, list) or len(ramp) < 1:
+                raise ValueError("accent_from_reference needs a ramp of at least one colour")
         # A non-string mode must be reported as invalid data, never as a
         # TypeError from the membership test below.
         invalid_sampling = {

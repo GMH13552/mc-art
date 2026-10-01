@@ -425,6 +425,8 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         ramp_min_levels=getattr(appearance, "accent_ramp_min_levels", 3),
         ramp_max_dominant_share=getattr(appearance, "accent_ramp_max_dominant_share", 0.6),
         ramp_min_monotone=getattr(appearance, "accent_ramp_min_monotone", 0.6),
+        bar_fill_max=getattr(appearance, "accent_bar_fill_max", 0.75),
+        bar_min_aspect=getattr(appearance, "accent_bar_min_aspect", 2.0),
     )
     bands = band_report(
         rendered,
@@ -461,6 +463,8 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
             if audit["structure"]["ramp"]["monotone_shares"] else -1.0
         ),
         "accent_ramp_ok": bool(audit["structure"]["ramp"]["ok"]),
+        "accent_bar_clusters": int(audit["structure"]["shape"]["bar_clusters"]),
+        "accent_bar_ok": bool(audit["structure"]["shape"]["ok"]),
         "accent_structure_ok": bool(audit["structure"]["ok"]),
         "band_count": int(bands["band_count"]),
         "band_isolated_pixels": int(bands["isolated_pixels"]),
@@ -666,6 +670,103 @@ def validate_reference_pool(
             "in descriptor.reference_waiver"
         ],
         warnings=["attached reference(s): %s" % (", ".join(attached) or "none")],
+    )
+
+
+# The strictness the engine considers the reference -- the values the shipped
+# family uses and which vanilla's own art passes. A plan may declare something
+# looser, but if its product only passes *because* of the relaxation, that is a
+# finding rather than a pass.
+ENGINE_LIMITS: dict[str, tuple[str, float]] = {
+    "accent_edge_max": (">", 60.0),
+    "accent_ramp_max_dominant_share": (">", 0.6),
+    "accent_ramp_min_monotone": ("<", 0.6),
+    "accent_ramp_min_levels": ("<", 3.0),
+    "accent_motif_repeat_max": (">", 2.0),
+    "accent_layout_min_size_cv": ("<", 0.15),
+    "accent_layout_min_spacing_cv": ("<", 0.15),
+    "band_maximum_isolated": (">", 0.1),
+    "band_maximum_step": (">", 30.0),
+}
+
+
+def _measured_for(key: str, metrics: dict[str, object]) -> float | None:
+    """Read the measured counterpart of a declared limit out of the style metrics."""
+    source = {
+        "accent_edge_max": "accent_edge_delta_p90",
+        "accent_ramp_max_dominant_share": "accent_ramp_dominant_max",
+        "accent_ramp_min_monotone": "accent_ramp_monotone_min",
+        "accent_ramp_min_levels": "accent_ramp_levels_min",
+        "accent_motif_repeat_max": "accent_motif_repeat",
+        "accent_layout_min_size_cv": "accent_layout_size_cv",
+        "accent_layout_min_spacing_cv": "accent_layout_spacing_cv",
+        "band_maximum_isolated": "band_isolated_share",
+        "band_maximum_step": "band_mean_neighbour_step",
+    }.get(key)
+    if source is None:
+        return None
+    value = metrics.get("style." + source, metrics.get(source))
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _short(value: float) -> str:
+    return ("%g" % value) if float(value) == int(value) else ("%.4g" % value)
+
+
+def validate_declared_limits(appearance: object, metrics: dict[str, object]) -> ValidationResult:
+    """Refuse to let a plan quietly loosen the ruler it is measured against.
+
+    A highlight whose edge step measured 83 passed because the plan raised
+    ``accent_edge_max`` from the family's 60 to 90, and nothing said so. The
+    relaxation is allowed; doing it silently is not, because a gate the gated
+    thing can widen is not a gate.
+
+    Fires only when both halves hold: the declared limit is looser than the
+    engine's reference value **and** the measured product would have failed at
+    that reference value. A plan that relaxes a limit it comfortably meets is left
+    alone; a plan that relaxes one it only just meets has to say why in
+    ``appearance.threshold_waiver``.
+    """
+    declared: list[str] = []
+    for key, (direction, reference) in ENGINE_LIMITS.items():
+        value = getattr(appearance, key, None)
+        measured = _measured_for(key, metrics)
+        if value is None or measured is None:
+            continue
+        looser = value > reference if direction == ">" else value < reference
+        fails_reference = measured > reference if direction == ">" else measured < reference
+        if looser and fails_reference:
+            declared.append(
+                "%s: declared %s, engine reference %s, measured %s"
+                % (key, _short(float(value)), _short(reference), _short(measured))
+            )
+
+    metrics_out: dict[str, float | int | str | bool] = {
+        "relaxed_limits": len(declared),
+        "relaxations": " | ".join(declared) if declared else "",
+    }
+    if not declared:
+        return ValidationResult(passed=True, stage="limits", metrics=metrics_out)
+    headline = "DECLARED LIMIT RELAXED: " + "; ".join(declared)
+    waiver = str(getattr(appearance, "threshold_waiver", "") or "").strip()
+    if waiver:
+        return ValidationResult(
+            passed=True,
+            stage="limits",
+            metrics=metrics_out,
+            warnings=[headline, "accepted because threshold_waiver says: %s" % waiver],
+        )
+    return ValidationResult(
+        passed=False,
+        stage="limits",
+        metrics=metrics_out,
+        errors=[
+            headline + ". The product passes only because the limit was widened; say why in "
+            "appearance.threshold_waiver, or bring the declared value back to the engine's "
+            "reference"
+        ],
     )
 
 

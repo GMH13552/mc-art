@@ -1814,6 +1814,51 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                 token = str(legend[symbol])
                 pixels[x, y] = (*_palette_color(appearance.palette, token), 255)
 
+    # An accent taken from a reference's own lighting rather than drawn. The
+    # brightest few percent of the named reference inside the mask become the
+    # accent, mapped brightest-first down the ramp -- so a highlight follows the
+    # form because it *is* the form's own shading, not a bar pasted on top. A
+    # greyscale source is exactly the case the overlay path cannot serve: it has
+    # no chroma, so nothing is "salient", and a hand-drawn bar was the result.
+    accent_from_reference = appearance.accent_from_reference
+    if accent_from_reference is not None:
+        source_name = str(accent_from_reference.get("source", "")).strip()
+        ramp_tokens = [str(item) for item in (accent_from_reference.get("ramp") or [])]
+        source_image = _named_reference_image(
+            references, source_name, compiled.width, compiled.height
+        )
+        if source_image is not None and ramp_tokens:
+            try:
+                percent = float(accent_from_reference.get("brightest_percent", 22.0))
+            except (TypeError, ValueError):
+                percent = 22.0
+            percent = min(max(percent, 1.0), 100.0)
+            candidates = [
+                (x, y)
+                for y in range(compiled.height)
+                for x in range(compiled.width)
+                if compiled.mask.getpixel((x, y)) > 0
+                and source_image.getpixel((x, y))[3] >= 8
+            ]
+            source_pixels = source_image.convert("RGBA")
+            ranked = sorted(
+                candidates,
+                key=lambda point: _luma(source_pixels.getpixel(point)[:3]),
+                reverse=True,
+            )
+            take = max(1, int(round(len(ranked) * percent / 100.0)))
+            chosen = ranked[:take]
+            ramp = [_palette_color(appearance.palette, token) for token in ramp_tokens]
+            # Brightest gets ramp[0], dimmest of the chosen gets the last stop.
+            for index, point in enumerate(chosen):
+                if len(ramp) == 1:
+                    stop = ramp[0]
+                else:
+                    position = index / float(len(chosen) - 1) if len(chosen) > 1 else 0.0
+                    stop = ramp[min(len(ramp) - 1, int(round(position * (len(ramp) - 1))))]
+                x, y = point
+                pixels[x, y] = (*stop, 255)
+
     # A declared minimum accent deposit is enforced on the finished raster, so
     # one rule covers every way an accent can arrive -- pixel_map, region rule,
     # reference overlay or mark. "one or two jarring dots" is exactly a cluster

@@ -562,6 +562,32 @@ def _ramp_monotone_share(
     return round(falling, 4)
 
 
+def _bar_shape(cluster: set[tuple[int, int]], *, fill_max: float, min_aspect: float) -> dict[str, Any]:
+    """Is this accent a filled, elongated rectangle -- a bar pasted on?
+
+    The question is not "is it a rectangle". A compact 2x2 fleck, a diamond, an
+    L-shaped deposit: all fine, and all are what a deposit looks like when it is
+    part of the thing it sits on. What is not fine is an accent whose outline has
+    nothing to do with the form under it -- a filled band. So the test needs
+    **both** a high bounding-box fill *and* elongation: a solid 3x3 has fill 1.0
+    and aspect 1.0 and is not a bar; a solid 7x3 has fill 0.81 and aspect 2.33
+    and is.
+    """
+    xs = [point[0] for point in cluster]
+    ys = [point[1] for point in cluster]
+    width = max(xs) - min(xs) + 1
+    height = max(ys) - min(ys) + 1
+    fill = len(cluster) / float(width * height)
+    aspect = max(width, height) / float(min(width, height))
+    return {
+        "size": len(cluster),
+        "bbox": [min(xs), min(ys), width, height],
+        "fill_ratio": round(fill, 4),
+        "aspect": round(aspect, 2),
+        "bar": fill >= fill_max and aspect >= min_aspect,
+    }
+
+
 def accent_structure_report(
     points: set[tuple[int, int]],
     pixels: dict[tuple[int, int], tuple[int, int, int]],
@@ -573,6 +599,9 @@ def accent_structure_report(
     ramp_min_levels: int | None = 3,
     ramp_max_dominant_share: float | None = 0.6,
     ramp_min_monotone: float | None = 0.6,
+    bar_fill_max: float | None = 0.75,
+    bar_min_aspect: float | None = 1.8,
+    bar_min_pixels: int | None = 10,
     ramp_level_step: float = 16.0,
 ) -> tuple[dict[str, Any], list[str]]:
     """Ask whether the accents look drawn rather than stamped.
@@ -716,7 +745,38 @@ def accent_structure_report(
         "minimum_monotone": ramp_min_monotone,
         "ok": ramp_ok,
     }
-    report["ok"] = bool(motif_ok and layout_ok and ramp_ok)
+
+    # -- shape: is the accent a bar pasted on? ------------------------------
+    bars: list[dict[str, Any]] = []
+    if bar_fill_max is not None and bar_min_aspect is not None:
+        for cluster in clusters:
+            if bar_min_pixels is not None and len(cluster) < bar_min_pixels:
+                continue
+            shape = _bar_shape(cluster, fill_max=bar_fill_max, min_aspect=bar_min_aspect)
+            if shape["bar"]:
+                bars.append(shape)
+    report["shape"] = {
+        "bar_clusters": len(bars),
+        "bars": bars,
+        "fill_max": bar_fill_max,
+        "min_aspect": bar_min_aspect,
+        "min_pixels": bar_min_pixels,
+        "ok": not bars,
+    }
+    for shape in bars:
+        reasons.append(
+            "accent shape is a bar: a %d-pixel accent fills %.0f%% of its %dx%d bounding box "
+            "(limit %.0f%%) and is %.1f:1 elongated; the highlight's outline has nothing to do "
+            "with the form it lies on, so it reads as pasted on. Take the accent from the "
+            "reference's own lighting instead of drawing a band"
+            % (
+                shape["size"], shape["fill_ratio"] * 100.0,
+                shape["bbox"][2], shape["bbox"][3],
+                bar_fill_max * 100.0, shape["aspect"],
+            )
+        )
+
+    report["ok"] = bool(motif_ok and layout_ok and ramp_ok and not bars)
     return report, reasons
 
 
@@ -737,6 +797,9 @@ def accent_audit(
     ramp_min_levels: int | None = 3,
     ramp_max_dominant_share: float | None = 0.6,
     ramp_min_monotone: float | None = 0.6,
+    bar_fill_max: float | None = 0.75,
+    bar_min_aspect: float | None = 1.8,
+    bar_min_pixels: int | None = 10,
 ) -> dict[str, Any]:
     """Count the accent pixels a sprite spent, and check every declared budget.
 
@@ -774,6 +837,9 @@ def accent_audit(
         ramp_min_levels=ramp_min_levels,
         ramp_max_dominant_share=ramp_max_dominant_share,
         ramp_min_monotone=ramp_min_monotone,
+        bar_fill_max=bar_fill_max,
+        bar_min_aspect=bar_min_aspect,
+        bar_min_pixels=bar_min_pixels,
     )
     groups = components(points)
     sizes = sorted((len(group) for group in groups), reverse=True)

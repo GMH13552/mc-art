@@ -221,6 +221,57 @@ def fault_raw_ore_without_references() -> dict:
     return data
 
 
+def fault_pasted_band() -> dict:
+    """The rejected ingot's *shape* alone: a straight band across the top face.
+
+    Deliberately given a ramp the value rules accept, so the only thing wrong
+    with it is that its outline has nothing to do with the ingot -- which makes
+    this the bar rule's own fixture rather than a rerun of ``ramp-flat``.
+    """
+    data = _load("example_ingot")
+    data["request"]["name"] = "fault_pasted_band"
+    data["appearance"].pop("accent_from_reference", None)
+    _with_pixel_map(data, [
+        "................",
+        "................",
+        "................",
+        "................",
+        ".....43334......",
+        "....4321234.....",
+        ".....43334......",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+    ])
+    data["appearance"]["accent_colors"] = ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"]
+    data["appearance"]["accent_budget"] = 24
+    data["appearance"]["accent_min_cluster"] = 3
+    data["appearance"]["accent_cleanup"] = False
+    data["appearance"]["accent_edge_max"] = 200
+    data["appearance"].pop("threshold_waiver", None)
+    return data
+
+
+def fault_relaxed_limit() -> dict:
+    """A plan that widened its own ruler and did not say so.
+
+    The ingot as it was delivered before this round: ``accent_edge_max`` lifted
+    from the family's 60 to 90 with no waiver, while the product measures 83 --
+    it passes only because the limit moved.
+    """
+    data = _load("example_ingot")
+    data["request"]["name"] = "fault_relaxed_limit"
+    data["appearance"]["accent_edge_max"] = 90
+    data["appearance"].pop("threshold_waiver", None)
+    return data
+
+
 def fault_lone_dot(*, cleanup: bool) -> dict:
     """One isolated accent pixel: the literal "突兀的来一两个点".
 
@@ -384,6 +435,7 @@ def main(argv: list[str] | None = None) -> int:
         "lone-dot", "ugly-dots", "lone-dot-cleaned", "scatter", "hard-edge",
         "other-accent", "contour", "motif-repeat", "layout-grid", "ramp-flat",
         "no-reference", "no-reference-waiver", "pool-unused", "pool-empty",
+        "bar-shape", "relaxed-limit",
     )
     if args.list:
         for name in cases:
@@ -654,6 +706,50 @@ def main(argv: list[str] | None = None) -> int:
         for message in pool_errors[:1]:
             print("             %s" % message)
 
+    # 12: the bar rule and the relaxed-limit rule, on the ingot as rejected.
+    if wanted("bar-shape"):
+        data = fault_pasted_band()
+        run = _render(data, out / "bar-shape")
+        audit = accent_audit(
+            run.sprite_path,
+            accent_colors=data["appearance"]["accent_colors"],
+            base_colors=["#2C313B", "#3B424F", "#4E5666", "#646D80", "#7E8799"],
+            budget=data["appearance"]["accent_budget"],
+            minimum_cluster=data["appearance"]["accent_min_cluster"],
+            edge_max=data["appearance"]["accent_edge_max"],
+        )
+        shape = audit["structure"]["shape"]
+        fired = [reason for reason in audit["reasons"] if "shape is a bar" in reason]
+        checks.append((
+            "bar-shape -> a pasted band is caught by its build, not its values",
+            bool(fired) and shape["ok"] is False,
+            fired[0] if fired else "no bar reason; shape=%s" % shape,
+        ))
+        print("%-12s shape: bars=%s fill=%s aspect=%s | ramp ok=%s -> validation=%s" % (
+            "bar-shape", shape["bar_clusters"],
+            (shape["bars"] or [{}])[0].get("fill_ratio"), (shape["bars"] or [{}])[0].get("aspect"),
+            audit["structure"]["ramp"]["ok"],
+            "FAILED" if not run.validation.passed else "passed"))
+        for message in fired[:1]:
+            print("             %s" % message)
+
+    if wanted("relaxed-limit"):
+        data = fault_relaxed_limit()
+        run = _render(data, out / "relaxed-limit")
+        limit_errors = [
+            error for error in run.validation.errors if error.startswith("[limits]")
+        ]
+        checks.append((
+            "relaxed-limit -> widening the ruler silently is refused",
+            bool(limit_errors),
+            limit_errors[0] if limit_errors else "nothing reported",
+        ))
+        print("%-12s limits: validation=%s errors=%d" % (
+            "relaxed-limit", "FAILED" if not run.validation.passed else "passed",
+            len(limit_errors)))
+        for message in limit_errors[:1]:
+            print("             %s" % message)
+
     # A sheet so the difference can be looked at, not just counted.
     _sheet(out)
 
@@ -677,6 +773,7 @@ def _sheet(out: Path) -> None:
         ("REJECTED: one stamp x4", out / "motif-repeat" / "sprite.png"),
         ("even grid, 4 shapes", out / "layout-grid" / "sprite.png"),
         ("REJECTED: flat ingot block", out / "ramp-flat" / "sprite.png"),
+        ("REJECTED: pasted band", out / "bar-shape" / "sprite.png"),
         ("good ingot sheen", out / "example_ingot_good" / "sprite.png"),
     ]
     present = [(label, path) for label, path in panels if path.exists()]

@@ -44,6 +44,7 @@ from .validation import (
     SemanticCritic,
     StructuralCritic,
     aggregate_results,
+    validate_declared_limits,
     validate_geometry,
     validate_reference_contract,
     validate_reference_pool,
@@ -1636,6 +1637,8 @@ class GenerationPipeline:
         artifacts.append(_write_json(root / "validation_reference_pool.json", pool_result))
         for message in pool_result.errors:
             print("WARNING: %s" % message)
+        # A plan may widen a limit it is measured against -- but not quietly.
+        # Needs the style metrics, so this runs after the style stage below.
         reference_alert = {
             "step": selection.get("step"),
             "chosen": (selection.get("chosen") or {}).get("name"),
@@ -1652,6 +1655,12 @@ class GenerationPipeline:
         # the accent-to-base step. Always written, whether or not the plan
         # declared a budget to gate on.
         style_result = validate_style(active_plan.appearance, sprite)
+        # Now that the measurements exist, check that this plan did not widen the
+        # ruler it is measured against and then only just pass.
+        limits_result = validate_declared_limits(active_plan.appearance, style_result.metrics)
+        artifacts.append(_write_json(root / "validation_limits.json", limits_result))
+        for message in limits_result.errors:
+            print("WARNING: %s" % message)
         artifacts.append(_write_json(
             root / "style_report.json",
             {
@@ -1724,7 +1733,7 @@ class GenerationPipeline:
             expected_mask=entity_alpha_contract.alpha if entity_alpha_contract is not None else compiled.mask,
         )
         final_result = aggregate_results(
-            [pre_render, render_result, style_result, reference_result, pool_result]
+            [pre_render, render_result, style_result, reference_result, pool_result, limits_result]
         )
         artifacts.extend(
             [

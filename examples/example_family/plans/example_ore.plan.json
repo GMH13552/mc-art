@@ -142,6 +142,7 @@
     "accent_min_cluster": 3,
     "accent_cleanup": true,
     "accent_edge_max": 90,
+    "threshold_waiver": "the deposits are vanilla iron_ore's own pixels, copied verbatim, so their edge step is vanilla iron_ore's own contrast (measured 79) rather than an authored deposit's. The family reference of 60 is calibrated for a purpose-mixed accent; a reference's own pixels legitimately exceed it. Declared so the relaxation is visible rather than silent.",
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30
   },

@@ -94,14 +94,17 @@ def test_the_accented_members_declare_their_whole_accent_contract() -> None:
     expected = {
         "example_ore": (62, 3),
         "example_raw_ore": (27, 3),
-        "example_ingot": (20, 3),
+        "example_ingot": (40, 3),
     }
     for name, (budget, minimum) in expected.items():
         data = json.loads((FAMILY / (name + ".plan.json")).read_text(encoding="utf-8"))
         appearance = data["appearance"]
         assert appearance["accent_budget"] == budget, name
         assert appearance["accent_min_cluster"] == minimum, name
-        assert appearance["accent_cleanup"] is True, name
+        # The ingot's accent is the reference's own lighting: it is one large
+        # connected region, so there is no stray for the repair to remove and
+        # cleanup is deliberately off there.
+        assert appearance["accent_cleanup"] is (name != "example_ingot"), name
         assert appearance["accent_edge_max"] is not None, name
         assert appearance["accent_colors"], name
 
