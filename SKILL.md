@@ -335,6 +335,47 @@ JSON, a previous run, or memory. Then answer:
 
 Fix before reporting, and say what you changed.
 
+## The last look: put it beside the vanilla asset and answer three questions
+
+**This step is mandatory, not optional, and it is not the same step as the one
+above.** Do it after the render is finished and after every gate is green. A
+green gate is the *start* of this step, never a substitute for it.
+
+1. Magnify `sprite.png` **next to the reference the plan actually attached**, in
+   one image, and read that image back. For a family, also put the whole contact
+   sheet on screen. `scripts/magnify.py` takes both as entries:
+
+   ```bash
+   python3 scripts/magnify.py '{"out":"/tmp/last_look.png","cols":2,"entries":[
+     ["VANILLA","refs/iron_ore.png"], ["MINE","outputs/ore/sprite.png"]]}'
+   ```
+
+2. **Answer these three questions in words, in the handover note.** Not in your
+   head, not as "looks fine" — the actual sentences:
+
+   - **Can you tell what it is?** An ore that reads as ore, an ingot that reads
+     as an ingot, without the filename.
+   - **Is it ugly?** Judge it as something a player will stare at several hundred
+     times, not as something that passed a check.
+   - **Beside the vanilla asset, is it from the same game?** Not "does it
+     resemble that one reference" — does it look like the *same artist's* work.
+     Wrong lighting model, wrong saturation, wrong silhouette language, wrong
+     level of detail: each of these makes it a different game.
+
+3. **Any "no" means go back to the plan.** Do not hand it over. Fix the plan,
+   re-render, look again.
+
+4. **Say this explicitly in the handover:** `audit` green and `style_report`
+   green are **not** the answers to these three questions. They answer "did a
+   limit get broken", which is a different question from "is it good". The
+   record is unambiguous: a delivery passed every gate, with the budget, the
+   hue span and the band metrics all inside their declared limits, and the user
+   rejected it three times running — the ore specks were a stamp, the ingot was
+   a pasted band, and the palette was two palettes. Every number was green.
+
+If you cannot answer question 3 with the reference tile next to the product,
+you have not done this step.
+
 ## Before you hand it over: look at it in the game's view
 
 An atlas can land on exactly the right rects and the mob can still be wrong: a

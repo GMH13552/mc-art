@@ -1124,7 +1124,8 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                       appearance: AppearanceSpec, seed: int = 0,
                       references: list[ReferenceAsset] | None = None,
                       alpha_mask: Image.Image | None = None,
-                      alpha_source: Image.Image | None = None) -> Image.Image:
+                      alpha_source: Image.Image | None = None,
+                      accent_out: dict[str, object] | None = None) -> Image.Image:
     """Paint a geometry coverage map under an explicit output-alpha contract.
 
     For normal 2-D assets the compiled geometry remains both the paint coverage
@@ -1934,7 +1935,48 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                         255,
                     )
 
-    # A declared minimum accent deposit is enforced on the finished raster, so
+    # An accent that was authored rather than taken from a reference gets the
+    # same transition. Without it the family cannot converge: a pasted deposit
+    # keeps a 40+ luma gap while an embedded one sits at vanilla's 12.
+    appearance_embed = float(getattr(appearance, "accent_embed", 0.0) or 0.0)
+    if appearance_embed > 0.0 and appearance.accent_colors:
+        detected, _detect_mode = accent_points(
+            result,
+            accent_colors=appearance.accent_colors,
+            base_colors=declared_base_swatches(appearance),
+            palette=appearance.palette,
+        )
+        detected = {point for point in detected if point not in reference_accent_points}
+        raster = result.load()
+        opaque = {
+            (px, py)
+            for py in range(result.height)
+            for px in range(result.width)
+            if raster[px, py][3] > 0
+        }
+        for x, y in sorted(detected):
+            neighbours = [
+                (x + dx, y + dy)
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                if (x + dx, y + dy) in opaque and (x + dx, y + dy) not in detected
+            ]
+            if not neighbours:
+                continue
+            here = raster[x, y][:3]
+            target = [
+                sum(raster[nx, ny][channel] for nx, ny in neighbours) / len(neighbours)
+                for channel in range(3)
+            ]
+            raster[x, y] = (
+                *(
+                    int(round(here[channel] * (1.0 - appearance_embed) + target[channel] * appearance_embed))
+                    for channel in range(3)
+                ),
+                255,
+            )
+        pixels = result.load()
+
+
     # one rule covers every way an accent can arrive -- pixel_map, region rule or
     # mark. "one or two jarring dots" is exactly a cluster below the authored
     # minimum; the survivor keeps its colour and the speck takes the nearest base
@@ -1996,6 +2038,13 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                         )
                         pixels[x, y] = pixels[nearest_x, nearest_y]
     result.putalpha(output_alpha)
+    if accent_out is not None:
+        # The accent set the renderer actually decided, handed straight to the
+        # audit. Re-detecting it downstream by distance to the declared swatches
+        # cannot work once the accent is embedded -- embedding IS the act of
+        # pulling the accent toward the base, so the swatch test stops
+        # recognising the very pixels the engine just placed.
+        accent_out["points"] = set(reference_accent_points)
     return result
 
 

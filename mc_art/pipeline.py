@@ -1588,6 +1588,7 @@ class GenerationPipeline:
         ))
         if entity_alpha_contract is not None:
             artifacts.extend(_save_entity_alpha_diagnostics(compiled, entity_alpha_contract, root))
+        accent_sink: dict[str, object] = {}
         sprite = render_appearance(
             active_plan.geometry,
             compiled,
@@ -1596,6 +1597,7 @@ class GenerationPipeline:
             references=active_plan.references,
             alpha_mask=entity_alpha_contract.alpha if entity_alpha_contract is not None else None,
             alpha_source=entity_alpha_contract.source if entity_alpha_contract is not None else None,
+            accent_out=accent_sink,
         )
         sprite_path = root / "sprite.png"
         sprite.save(sprite_path, "PNG")
@@ -1654,7 +1656,11 @@ class GenerationPipeline:
         # What the raster actually came out like: value bands, accent spend and
         # the accent-to-base step. Always written, whether or not the plan
         # declared a budget to gate on.
-        style_result = validate_style(active_plan.appearance, sprite)
+        style_result = validate_style(
+            active_plan.appearance,
+            sprite,
+            accent_points=accent_sink.get("points") or None,
+        )
         # Now that the measurements exist, check that this plan did not widen the
         # ruler it is measured against and then only just pass.
         limits_result = validate_declared_limits(active_plan.appearance, style_result.metrics)

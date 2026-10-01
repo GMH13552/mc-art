@@ -803,6 +803,7 @@ def accent_audit(
     accent_base_gap_max: float | None = 20.0,
     accent_base_edge_mean_max: float | None = 35.0,
     threshold_waiver: str = "",
+    points: set[tuple[int, int]] | None = None,
 ) -> dict[str, Any]:
     """Count the accent pixels a sprite spent, and check every declared budget.
 
@@ -823,13 +824,20 @@ def accent_audit(
     """
     loaded = _load(image)
     pixels = _opaque_map(loaded)
-    points, mode = accent_points(
-        loaded,
-        accent_colors=accent_colors,
-        base_colors=base_colors,
-        palette=palette,
-        accent_tolerance=accent_tolerance,
-    )
+    # When the renderer supplies the accent set it decided, use it verbatim: the
+    # engine knows which pixels it placed, and a distance test against the
+    # declared swatches loses them the moment they are embedded.
+    if points is not None:
+        points = {point for point in points if point in pixels}
+        mode = "renderer_declared"
+    else:
+        points, mode = accent_points(
+            loaded,
+            accent_colors=accent_colors,
+            base_colors=base_colors,
+            palette=palette,
+            accent_tolerance=accent_tolerance,
+        )
     base_points = set(pixels) - points
     structure, structure_reasons = accent_structure_report(
         points,
@@ -936,13 +944,27 @@ def accent_audit(
     report["clusters_ok"] = sum(undersized) == 0
     report["edge_ok"] = edge_max is None or (report["edge_delta_p90"] or 0.0) <= edge_max
     # Embedded, or pasted on? Vanilla iron_ore: gap 12.2, edge mean 23.3, p90 43.4.
+    #
+    # Not applicable when there is no accent, or when the sprite has no base for
+    # an accent to sit in -- a fixture that paints one dot on transparency has no
+    # "material it is set into", and asking the question there is a category
+    # error, not a failure.
     gap = report["accent_base_gap_mean"] or 0.0
     edge_mean = report["edge_delta_mean"] or 0.0
+    # Not applicable when there is no accent, no base pixels under it, no declared
+    # base material -- or only a single accent pixel. Embedding is a relationship
+    # between a deposit and the material around it, so it needs both a boundary
+    # and an interior; a lone pixel has neither and is the cluster gate's business.
+    gap_applicable = (
+        len(points) >= 2 and bool(base_points) and bool(base_colors)
+    )
     gap_ok = (
         accent_base_gap_max is None
+        or not gap_applicable
         or (gap <= accent_base_gap_max and edge_mean <= accent_base_edge_mean_max)
     )
     report["base_gap"] = {
+        "applicable": gap_applicable,
         "accent_base_gap_mean": report["accent_base_gap_mean"],
         "edge_delta_mean": report["edge_delta_mean"],
         "edge_delta_p90": report["edge_delta_p90"],
@@ -950,14 +972,19 @@ def accent_audit(
         "maximum_edge_mean": accent_base_edge_mean_max,
         "ok": gap_ok,
     }
-    report["base_gap_ok"] = gap_ok
+    gap_waived = False
     if not gap_ok and threshold_waiver:
         # Allowed with a stated reason, exactly as a widened limit is: the number
-        # is still reported, it just does not refuse the asset.
+        # is still reported, it just does not refuse the asset. The reason text is
+        # routed to `waived_reasons` so the verdict and the message cannot
+        # disagree -- "passed, but here is why it did not" is how a waiver turns
+        # back into a silent green.
         gap_ok = True
+        gap_waived = True
         report["base_gap"]["ok"] = True
         report["base_gap"]["waived"] = threshold_waiver
     report["base_gap_ok"] = gap_ok
+    report["points"] = sorted(points)
     report["budget"] = budget
     report["structure"] = structure
     report["consistent"] = bool(
@@ -968,6 +995,7 @@ def accent_audit(
         and structure["ok"]
     )
     reasons: list[str] = []
+    waived_reasons: list[str] = []
     if not report["within_budget"]:
         reasons.append(
             "%d accent pixel(s) exceed the declared budget of %d" % (len(points), budget)
@@ -983,15 +1011,22 @@ def accent_audit(
             % (report["edge_delta_p90"] or 0.0, edge_max or 0.0)
         )
     if accent_base_gap_max is not None and not gap_ok:
-        reasons.append(
+        message = (
             "accent is not embedded: accents sit %.1f luma from the material they are set "
             "into (limit %.1f) and the accent boundary steps by %.1f (limit %.1f). Vanilla's "
             "own iron_ore measures 12.2 / 23.3 -- its flecks nearly dissolve in their stone. "
             "Add an embed/rim transition between the accent and the base"
             % (gap, accent_base_gap_max, edge_mean, accent_base_edge_mean_max or 0.0)
         )
+        if gap_waived:
+            # The verdict passed, so the message must not read as a failure.
+            # Reported, not refused -- the same shape as a waived limit.
+            waived_reasons.append(message)
+        else:
+            reasons.append(message)
     reasons.extend(structure_reasons)
     report["reasons"] = reasons
+    report["waived_reasons"] = waived_reasons
     return report
 
 

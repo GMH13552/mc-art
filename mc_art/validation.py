@@ -387,7 +387,11 @@ def validate_render_alpha(
     )
 
 
-def validate_style(appearance: object, rendered: Image.Image) -> ValidationResult:
+def validate_style(
+    appearance: object,
+    rendered: Image.Image,
+    accent_points: set[tuple[int, int]] | None = None,
+) -> ValidationResult:
     """Check the art-quality budgets the plan declared, on the finished sprite.
 
     Three declarations become three hard errors, because each one is a thing a
@@ -430,6 +434,8 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         bar_min_pixels=getattr(appearance, "accent_bar_min_pixels", 10),
         accent_base_gap_max=getattr(appearance, "accent_base_gap_max", 20.0),
         accent_base_edge_mean_max=getattr(appearance, "accent_base_edge_mean_max", 35.0),
+        threshold_waiver=getattr(appearance, "threshold_waiver", ""),
+        points=accent_points,
     )
     bands = band_report(
         rendered,
@@ -471,6 +477,10 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         "accent_base_gap_mean": audit["accent_base_gap_mean"],
         "accent_edge_delta_mean": audit["edge_delta_mean"],
         "accent_base_gap_ok": bool(audit["base_gap_ok"]),
+        # Exported so a re-audit of the delivered PNG (the example build does
+        # exactly that) judges the same pixel set the renderer placed, instead of
+        # re-deriving it by colour distance and losing an embedded accent.
+        "accent_points": sorted(audit["points"]) if audit.get("points") else None,
         "accent_luma_mean": audit["accent_luma_mean"],
         "base_luma_mean": audit["base_luma_mean"],
         "accent_structure_ok": bool(audit["structure"]["ok"]),

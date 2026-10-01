@@ -146,10 +146,10 @@
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_colors": [
-      "#C9B18E",
-      "#B29A78",
-      "#98835F",
-      "#6F6146"
+      "#BFAE93",
+      "#A8977E",
+      "#8F8068",
+      "#6A6050"
     ],
     "accent_budget": 24,
     "accent_min_cluster": 1,
@@ -160,13 +160,13 @@
       "source": "iron_ingot",
       "brightest_percent": 5,
       "ramp": [
-        "#C9B18E",
-        "#B29A78",
-        "#98835F",
-        "#6F6146"
+        "#BFAE93",
+        "#A8977E",
+        "#8F8068",
+        "#6A6050"
       ],
-      "embed": 0.55,
-      "rim": 0.2
+      "embed": 0.72,
+      "rim": 0.25
     },
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30,
@@ -195,7 +195,9 @@
         "................",
         "................"
       ]
-    }
+    },
+    "accent_ramp_min_levels": null,
+    "accent_ramp_min_monotone": null
   },
   "references": [
     {

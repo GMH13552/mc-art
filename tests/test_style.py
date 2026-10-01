@@ -138,9 +138,24 @@ def test_an_accent_budget_of_zero_passes_plain_stone_and_fails_one_amber_pixel(t
 
 def test_the_budget_is_the_only_thing_that_makes_it_a_failure(tmp_path: Path) -> None:
     with_speck = _speckled(tmp_path / "speck.png", (60, 66, 78, 255), [(8, 8)])
-    unchecked = style.accent_audit(with_speck, base_colors=["#3C424E"])
+    # No base material declared: there is nothing for the accent to be embedded
+    # in, so the embedding question does not apply and nothing is claimed.
+    unchecked = style.accent_audit(with_speck)
     assert unchecked["accent_pixels"] == 1
     assert unchecked["consistent"] is True, "no budget declared means nothing is claimed"
+    assert unchecked["base_gap"]["applicable"] is False
+
+    # Declare the base material and the same speck is now judged against it --
+    # but a single pixel has no boundary and no interior, so the embedding
+    # question is still the cluster gate's, not this one's.
+    declared = style.accent_audit(with_speck, base_colors=["#3C424E"])
+    assert declared["base_gap"]["applicable"] is False
+
+    deposit = _speckled(tmp_path / "deposit.png", (60, 66, 78, 255), [(8, 8), (9, 8), (10, 8), (9, 9)])
+    embedded = style.accent_audit(deposit, base_colors=["#3C424E"])
+    assert embedded["base_gap"]["applicable"] is True
+    assert embedded["base_gap_ok"] is False
+    assert any("not embedded" in reason for reason in embedded["reasons"])
 
 
 def test_a_declared_minimum_cluster_removes_a_speck_and_keeps_a_deposit(tmp_path: Path) -> None:

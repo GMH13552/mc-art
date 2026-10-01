@@ -172,6 +172,7 @@ def render_family(out: Path) -> tuple[dict[str, dict], list[str]]:
             "declared_accent_budget": plan.appearance.accent_budget,
             "declared_min_cluster": plan.appearance.accent_min_cluster,
             "declared_accent_colors": list(plan.appearance.accent_colors),
+            "accent_points": run.validation.metrics.get("style.accent_points"),
             "structure": run.validation.metrics.get("style.accent_structure_ok"),
             "declared_base_colors": [
                 plan.appearance.palette.get(token, token)
@@ -200,12 +201,37 @@ def measure(results: dict[str, dict]) -> dict:
         if not row["sprite"]:
             continue
         row["bands"] = band_report(row["sprite"])
+        # The renderer knows which pixels it placed, so the audit is told rather
+        # than left to re-derive them by colour distance: an embedded accent has
+        # been pulled toward its base, and the swatch test would lose it.
+        declared_points = row.get("accent_points")
+        # Re-measure the delivered PNG, but do not re-gate it: `validate_style`
+        # already judged this sprite against the plan's OWN declared thresholds,
+        # and re-judging it here with the engine defaults would report a failure
+        # for a plan that deliberately declared something else. The build prints
+        # the numbers; the render's verdict is the verdict.
         row["accent"] = accent_audit(
             row["sprite"],
             accent_colors=row.get("declared_accent_colors") or ACCENT_SWATCHES,
             base_colors=row["declared_base_colors"],
             budget=row["declared_accent_budget"],
             minimum_cluster=row["declared_min_cluster"],
+            points=(
+                {(int(x), int(y)) for x, y in declared_points}
+                if declared_points else None
+            ),
+            edge_max=None,
+            motif_repeat_max=None,
+            layout_min_size_cv=None,
+            layout_min_spacing_cv=None,
+            ramp_min_pixels=None,
+            ramp_min_levels=None,
+            ramp_max_dominant_share=None,
+            ramp_min_monotone=None,
+            bar_fill_max=None,
+            bar_min_aspect=None,
+            accent_base_gap_max=None,
+            accent_base_edge_mean_max=None,
         )
     return family_axes(
         sprites,

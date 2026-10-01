@@ -441,6 +441,9 @@ class AppearanceSpec:
     # accent-boundary step mean 23.3 -- its flecks nearly dissolve in their stone.
     accent_base_gap_max: float | None = 20.0
     accent_base_edge_mean_max: float | None = 35.0
+    # Blend an authored accent toward the material around it, so it is set in
+    # rather than pasted on. 0 disables.
+    accent_embed: float = 0.0
     # Where the accent comes from. When set, the accent is not authored pixels at
     # all: the engine takes the brightest ``brightest_percent`` of the named
     # reference's own luminance inside the mask and maps them, brightest first,
