@@ -611,12 +611,322 @@ def _name_tokens(value: str) -> set[str]:
     }
 
 
+def validate_reference_class(
+    declared_class: str,
+    declared_layer: str,
+    references: list[object],
+    *,
+    chosen_name: str,
+    available: list[object] | None = None,
+    asset: str = "",
+) -> ValidationResult:
+    """Is the reference that was actually chosen the KIND the plan declared?
+
+    A real project's ``smoke_mist_stone`` -- a shallow mist stone -- attached
+    ``deepslate.png``, and its own note said the shallow variant was available and
+    "must NOT be chosen". The candidate table could not see it: it scored roles,
+    alpha overlap and how many words two filenames share, and "deep" against
+    "shallow" is not a word overlap, it is a kind.
+
+    Three separate questions, because they fail differently:
+
+    * does each reference carry the class the ENGINE derives from its own name?
+      (a plan can otherwise mislabel what it attached)
+    * is the chosen reference the class the plan declared for the asset?
+    * is it in the layer the plan declared?
+
+    A plan that declares nothing is not failed -- it is reported as unchecked, so
+    a green run never implies a check that did not happen.
+    """
+    from .refclass import CLASSES, LAYERS, classify, layer_of
+
+    metrics: dict[str, float | int | str | bool] = {
+        "declared_class": declared_class or "",
+        "declared_layer": declared_layer or "",
+        "chosen": chosen_name or "",
+        "checked": False,
+    }
+    problems: list[str] = []
+    warnings: list[str] = []
+
+    if declared_class and declared_class not in CLASSES:
+        problems.append(
+            "descriptor.reference_class '%s' is not a class the engine knows; the published "
+            "table is: %s" % (declared_class, ", ".join(CLASSES))
+        )
+    if declared_layer and declared_layer not in LAYERS:
+        problems.append(
+            "descriptor.reference_layer '%s' is not a layer the engine knows; the published "
+            "table is: %s" % (declared_layer, ", ".join(LAYERS))
+        )
+
+    # 1. Does each attached reference match the class it claims to be?
+    for reference in references or []:
+        name = str(getattr(reference, "name", ""))
+        claimed = str(getattr(reference, "declared_class", "") or "")
+        if not claimed:
+            continue
+        derived = classify(name)
+        if derived != "unknown" and claimed != derived:
+            problems.append(
+                "reference '%s' declares class '%s' but the engine derives '%s' from its name "
+                "-- a plan may not relabel what it attached" % (name, claimed, derived)
+            )
+
+    # 2a. Is the declared class REPRESENTED among the attached references?
+    #
+    # Not "is the globally-chosen one that class": a base+deposit plan declares the
+    # deposit's class and legitimately attaches the base too. `starfall_ore` is an
+    # ore whose rock is deepslate, so its references are deepslate AND iron_ore, and
+    # the ore is what makes it an ore. Requiring the chosen reference to carry the
+    # class would refuse a correct plan.
+    if declared_class:
+        attached_classes = [
+            (str(getattr(reference, "name", "")), classify(str(getattr(reference, "name", ""))))
+            for reference in references or []
+        ]
+        metrics["attached_classes"] = ", ".join(
+            "%s=%s" % (name, derived) for name, derived in attached_classes
+        )
+        represented = [name for name, derived in attached_classes if derived == declared_class]
+        metrics["class_represented"] = bool(represented)
+        if attached_classes and not represented:
+            candidates = [
+                "%s (%s)" % (
+                    str(getattr(item, "name", "")), classify(str(getattr(item, "name", "")))
+                )
+                for item in (available or [])
+                if classify(str(getattr(item, "name", ""))) == declared_class
+            ]
+            problems.append(
+                "%s declares class '%s' but none of its attached reference(s) is one: %s%s"
+                % (
+                    asset or "this asset",
+                    declared_class,
+                    metrics["attached_classes"],
+                    ". Same-class references offered: %s" % ", ".join(candidates)
+                    if candidates
+                    else ". No reference of that class was offered at all",
+                )
+            )
+
+    # 2b. Is the chosen (base) reference in the declared layer?
+    chosen = None
+    for reference in references or []:
+        if str(getattr(reference, "name", "")) == chosen_name:
+            chosen = reference
+            break
+    if chosen is None:
+        if declared_class or declared_layer:
+            warnings.append(
+                "no reference was chosen, so the declared class '%s' was not checked against "
+                "anything" % (declared_class or declared_layer)
+            )
+    else:
+        metrics["checked"] = True
+        derived_class = classify(str(getattr(chosen, "name", "")))
+        derived_layer = layer_of(str(getattr(chosen, "name", "")))
+        metrics["chosen_class"] = derived_class
+        metrics["chosen_layer"] = derived_layer
+        if declared_layer and derived_layer != "unknown" and derived_layer != declared_layer:
+            candidates = [
+                str(getattr(item, "name", ""))
+                for item in (available or [])
+                if layer_of(str(getattr(item, "name", ""))) == declared_layer
+            ]
+            problems.append(
+                "%s declares layer '%s' but attached '%s', which lives in the '%s' layer%s"
+                % (
+                    asset or "this asset",
+                    declared_layer,
+                    getattr(chosen, "name", ""),
+                    derived_layer,
+                    ". References in that layer: %s" % ", ".join(candidates)
+                    if candidates
+                    else "",
+                )
+            )
+
+    if not (declared_class or declared_layer):
+        # Nothing was declared, so nothing was checked -- even though a reference
+        # exists to check. `checked` means "a declared kind was compared", not
+        # "there was a reference".
+        metrics["checked"] = False
+        return ValidationResult(
+            passed=True,
+            stage="reference_class",
+            metrics=metrics,
+            warnings=[
+                "no reference class was declared, so 'the chosen reference is the kind the asset "
+                "claims to be' was NOT checked (declare descriptor.reference_class)"
+            ],
+        )
+    if problems:
+        return ValidationResult(
+            passed=False, stage="reference_class", metrics=metrics, errors=problems,
+            warnings=warnings,
+        )
+    if not metrics["checked"] and not problems:
+        return ValidationResult(
+            passed=True,
+            stage="reference_class",
+            metrics=metrics,
+            warnings=[
+                "no reference was chosen, so the declared class '%s' was not checked against "
+                "anything" % (declared_class or declared_layer)
+            ],
+        )
+    return ValidationResult(passed=True, stage="reference_class", metrics=metrics, warnings=warnings)
+
+
+# Phrases in a note that forbid something. A note attached to reference X that
+# forbids X is self-contradictory, and that is exactly what shipped: a shallow
+# asset whose note said the shallow reference "must NOT be chosen".
+_PROHIBITION = re.compile(
+    r"\b(must not|mustn't|do not|don't|never|shall not|should not|cannot|can't)\b[^.]*"
+    r"\b(be chosen|be used|be selected|use|choose|select|attach|pick)\b",
+    re.IGNORECASE,
+)
+
+# Words that turn a mention of a reference into an argument for it. Prose that
+# merely names another reference ("overlaid on the stone base") is not an argument.
+_CHOICE_VERB = re.compile(
+    r"\b(chosen|choose|choosing|select|selected|use|used|using|prefer|preferred|"
+    r"attach|attached|pick|picked)\b",
+    re.IGNORECASE,
+)
+
+# "this is the same reference mist_stone uses" -- a claim about another plan that
+# the engine can check, because it has that plan.
+_SAME_AS_PLAN = re.compile(
+    r"\b(?:same|identical)\s+reference\s+(?:as|that)\s+(?:plan\s+)?[`\"']?([A-Za-z0-9_.\-]+)",
+    re.IGNORECASE,
+)
+_SAME_AS_PLAN_ALT = re.compile(
+    r"\b(?:the\s+)?reference\s+(?:that\s+)?([A-Za-z0-9_.\-]+)\s+uses\b",
+    re.IGNORECASE,
+)
+
+
+def validate_reference_notes(
+    references: list[object],
+    *,
+    plan_references: dict[str, list[str]] | None = None,
+    available: list[object] | None = None,
+    asset: str = "",
+) -> ValidationResult:
+    """Do the notes describe the reference they are attached to?
+
+    Notes are free text, which is why a plan could attach the very reference its
+    note forbade, and why a reason copied from another plan propagated a mistake
+    into a document. Three concrete contradictions are checkable:
+
+    * a note on reference X that NAMES a different reference -- it is describing
+      something other than what it is attached to;
+    * a note on X that forbids a reference which, by name or class, is X itself;
+    * a note claiming "the same reference as <plan>" when that plan's actual
+      references differ, which requires the sibling plans to be supplied.
+    """
+    problems: list[str] = []
+    metrics: dict[str, float | int | str | bool] = {
+        "notes_checked": 0,
+        "plan_references_supplied": bool(plan_references),
+    }
+    names = [str(getattr(reference, "name", "")) for reference in references or []]
+    pool_names = [str(getattr(item, "name", "")) for item in (available or [])]
+
+    for reference in references or []:
+        holder = str(getattr(reference, "name", ""))
+        for note in getattr(reference, "notes", []) or []:
+            text = str(note)
+            metrics["notes_checked"] += 1
+
+            # (a) naming ANOTHER reference as the one to use.
+            #
+            # Not "mentions another reference": a note on an ore reference
+            # legitimately says its specks are "overlaid on the stone base", and
+            # `stone` is another attached reference. Firing on that would punish
+            # the notes that explain a composite choice. The dangerous note is the
+            # one arguing for a DIFFERENT reference -- it names one and says to
+            # choose/use/attach it -- because that note belongs on the other
+            # reference and was copied here.
+            if _CHOICE_VERB.search(text):
+                for other in names + pool_names:
+                    if other == holder or len(other) < 3:
+                        continue
+                    if re.search(
+                        r"(?<![a-z0-9_])%s(?![a-z0-9_])" % re.escape(other.lower()), text.lower()
+                    ):
+                        problems.append(
+                            "reference '%s' carries a note that argues for '%s', a different "
+                            "reference: the note names something else as the one to use, so it "
+                            "describes something other than what it is attached to -- %r"
+                            % (holder, other, text[:120])
+                        )
+                        break
+
+            # (b) forbidding itself, by name or by LAYER.
+            #
+            # Only the layer, never the bare word "stone": every stone class
+            # contains it, so matching on it made a correct deep note look like it
+            # forbade a deep reference. The layer is the word that carries the
+            # meaning -- "a shallow-layer stone must not be chosen", attached to a
+            # deepslate, forbids nothing that is here.
+            if _PROHIBITION.search(text):
+                from .refclass import layer_of
+
+                lowered = text.lower()
+                holder_layer = layer_of(holder)
+                self_references: list[str] = []
+                if holder.lower() in lowered:
+                    self_references.append("its own name")
+                if holder_layer in {"shallow", "deep", "nether", "end"} and re.search(
+                    r"\b%s" % holder_layer, lowered
+                ):
+                    self_references.append("its own layer ('%s')" % holder_layer)
+                if self_references:
+                    problems.append(
+                        "reference '%s' carries a note that forbids it: the note says it must not "
+                        "be chosen, and it refers to %s, which is this reference -- %r"
+                        % (holder, " and ".join(sorted(set(self_references))), text[:160])
+                    )
+
+            # (c) a claim about another plan
+            claimed = None
+            for pattern in (_SAME_AS_PLAN, _SAME_AS_PLAN_ALT):
+                found = pattern.search(text)
+                if found:
+                    claimed = found.group(1)
+                    break
+            if claimed and plan_references is not None:
+                actual = plan_references.get(claimed) or plan_references.get(claimed.lower())
+                if actual is None:
+                    problems.append(
+                        "reference '%s' claims to be the same as plan '%s', which was not supplied, "
+                        "so the claim could not be checked -- %r" % (holder, claimed, text[:120])
+                    )
+                elif holder not in actual:
+                    problems.append(
+                        "reference '%s' claims to be the same as the one plan '%s' uses, but that "
+                        "plan uses %s -- the claim is false"
+                        % (holder, claimed, ", ".join(actual) or "nothing")
+                    )
+
+    metrics["contradictions"] = len(problems)
+    if problems:
+        return ValidationResult(
+            passed=False, stage="reference_notes", metrics=metrics, errors=problems
+        )
+    return ValidationResult(passed=True, stage="reference_notes", metrics=metrics)
+
+
 def validate_reference_pool(
     attached: list[str],
     available: list[str],
     *,
     asset: str,
     waiver: str = "",
+    declared_class: str = "",
 ) -> ValidationResult:
     """Catch a same-class reference that was on disk and never attached.
 
@@ -665,6 +975,18 @@ def validate_reference_pool(
     def score(name: str) -> int:
         return len(_name_tokens(name) & asset_tokens)
 
+    from .refclass import classify, layer_of
+
+    # Every candidate's class is printed, so a caller picks by KIND rather than by
+    # "does the filename look similar". Without this the table is a word-overlap
+    # score, and "deep" against "shallow" is not a word overlap.
+    metrics["available_classes"] = ", ".join(
+        "%s=%s" % (name, classify(name)) for name in available
+    )
+    metrics["attached_classes"] = ", ".join(
+        "%s=%s" % (name, classify(name)) for name in attached
+    )
+
     attached_scores = [score(name) for name in attached]
     best_attached = max(attached_scores) if attached_scores else -1
     attached_names = {str(name).lower() for name in attached}
@@ -673,6 +995,23 @@ def validate_reference_pool(
         for name in available
         if str(name).lower() not in attached_names and score(name) > best_attached
     ]
+    # A same-CLASS candidate that was not attached is a stronger finding than a
+    # similar name: it is the reference the asset's own kind calls for. This is
+    # the upgrade the Lead asked for -- the criterion becomes "class", not "score".
+    if declared_class:
+        attached_classes = {classify(name) for name in attached}
+        class_unused = [
+            name
+            for name in available
+            if str(name).lower() not in attached_names
+            and classify(name) == declared_class
+            and declared_class not in attached_classes
+        ]
+        metrics["unused_same_class_kind"] = len(class_unused)
+        metrics["unused_same_class_names"] = ",".join(sorted(class_unused))
+        for name in sorted(class_unused):
+            if not any(existing == name for existing, _value in unused):
+                unused.append((name, score(name)))
     metrics["best_attached_score"] = best_attached
     metrics["unused_same_class"] = len(unused)
     metrics["unused_names"] = ",".join(name for name, _value in sorted(unused))

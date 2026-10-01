@@ -29,25 +29,18 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": [
-          "ore",
-          "stone",
-          "block face"
-        ],
+        "recognition_terms": ["ore", "stone", "block face"],
         "contour_intent": "surface"
       }
     ],
-    "negative_identities": [
-      "plain stone",
-      "cobblestone",
-      "coal",
-      "moss"
-    ],
+    "negative_identities": ["plain stone", "cobblestone", "coal", "moss"],
     "orientation": "flat, tiles seamlessly",
     "reference_strategy": "Identical deposition to example_ore (vanilla iron_ore’s chromatic mask mapped onto the family ramp) over example_deepslate’s own reference, palette and sampling mode — so the deep ore is the deep rock plus the same seam, which is what the vanilla pair iron_ore / deepslate_iron_ore is.",
     "shape_edit_mode": "appearance_only",
     "reference_part_map": null,
-    "target_part_map": null
+    "target_part_map": null,
+    "class": "ore_deposit",
+    "layer": "deep"
   },
   "geometry": {
     "width": 16,
@@ -60,9 +53,7 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": [
-          "stone"
-        ],
+        "recognition_terms": ["stone"],
         "contour_intent": "surface"
       }
     ],
@@ -72,10 +63,7 @@
         "part_id": "face",
         "primitive": "custom_mask",
         "params": {
-          "offset": [
-            0,
-            0
-          ],
+          "offset": [0, 0],
           "marker": "X",
           "rows": [
             "XXXXXXXXXXXXXXXX",
@@ -105,12 +93,7 @@
       {
         "id": "face_all",
         "part_id": "face",
-        "bbox": [
-          0,
-          0,
-          16,
-          16
-        ],
+        "bbox": [0, 0, 16, 16],
         "face": "all",
         "required": true,
         "notes": "identical to example_stone's region, so the two share one base face"
@@ -137,13 +120,7 @@
     },
     "parts": {
       "face": {
-        "colors": [
-          "deep_1",
-          "deep_2",
-          "deep_3",
-          "deep_4",
-          "deep_5"
-        ],
+        "colors": ["deep_1", "deep_2", "deep_3", "deep_4", "deep_5"],
         "material": "stone",
         "shade_axis": "none",
         "noise": 0.0,
@@ -165,12 +142,7 @@
     },
     "part_reference_composite": {},
     "motif_policy": "model_authored",
-    "accent_colors": [
-      "#8E7A5E",
-      "#7A6850",
-      "#655642",
-      "#4E422F"
-    ],
+    "accent_colors": ["#8E7A5E", "#7A6850", "#655642", "#4E422F"],
     "accent_budget": 70,
     "accent_min_cluster": 1,
     "accent_cleanup": true,
@@ -180,12 +152,7 @@
       "select": "chromatic",
       "chroma_min": 40,
       "brightest_percent": 100,
-      "ramp": [
-        "#8E7A5E",
-        "#7A6850",
-        "#655642",
-        "#4E422F"
-      ],
+      "ramp": ["#8E7A5E", "#7A6850", "#655642", "#4E422F"],
       "embed": 0.2,
       "rim": 0
     },
@@ -200,29 +167,23 @@
     {
       "path": "../refs/deepslate.png",
       "name": "deepslate",
-      "roles": [
-        "shape",
-        "material",
-        "pixel_style"
-      ],
+      "roles": ["shape", "material", "pixel_style"],
       "notes": [
         "group=minecraft:block/deepslate",
         "the deep base: the same reference, palette and sampling mode as example_deepslate, so the two deep blocks share one rock by construction"
-      ]
+      ],
+      "class": "deep_stone"
     },
     {
       "path": "../refs/iron_ore.png",
       "name": "iron_ore",
-      "roles": [
-        "shape",
-        "material",
-        "pixel_style"
-      ],
+      "roles": ["shape", "material", "pixel_style"],
       "notes": [
         "group=minecraft:block/iron_ore",
         "the DEPOSITS come from this: its own speck pixels are overlaid on the stone base, so the shapes, positions and values of the flecks are vanilla iron_ore's rather than hand-drawn crosses",
         "this is the reference the first delivery left out while the file sat unused on the reference root"
-      ]
+      ],
+      "class": "ore_deposit"
     }
   ]
 }

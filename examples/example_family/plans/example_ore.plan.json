@@ -29,25 +29,18 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": [
-          "ore",
-          "stone",
-          "block face"
-        ],
+        "recognition_terms": ["ore", "stone", "block face"],
         "contour_intent": "surface"
       }
     ],
-    "negative_identities": [
-      "plain stone",
-      "cobblestone",
-      "coal",
-      "moss"
-    ],
+    "negative_identities": ["plain stone", "cobblestone", "coal", "moss"],
     "orientation": "flat, tiles seamlessly",
     "reference_strategy": "Take example_stone's exact reference, palette and sampling mode so the base face is the same stone by construction, then place four deposits with an explicit pixel map. Declaring the accent swatches, a pixel budget and a minimum deposit size turns 'don't use ugly dots' into something the render can be held to.",
     "shape_edit_mode": "appearance_only",
     "reference_part_map": null,
-    "target_part_map": null
+    "target_part_map": null,
+    "class": "ore_deposit",
+    "layer": "shallow"
   },
   "geometry": {
     "width": 16,
@@ -60,9 +53,7 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": [
-          "stone"
-        ],
+        "recognition_terms": ["stone"],
         "contour_intent": "surface"
       }
     ],
@@ -72,10 +63,7 @@
         "part_id": "face",
         "primitive": "custom_mask",
         "params": {
-          "offset": [
-            0,
-            0
-          ],
+          "offset": [0, 0],
           "marker": "X",
           "rows": [
             "XXXXXXXXXXXXXXXX",
@@ -105,12 +93,7 @@
       {
         "id": "face_all",
         "part_id": "face",
-        "bbox": [
-          0,
-          0,
-          16,
-          16
-        ],
+        "bbox": [0, 0, 16, 16],
         "face": "all",
         "required": true,
         "notes": "identical to example_stone's region, so the two share one base face"
@@ -132,13 +115,7 @@
     },
     "parts": {
       "face": {
-        "colors": [
-          "stone_1",
-          "stone_2",
-          "stone_3",
-          "stone_4",
-          "stone_5"
-        ],
+        "colors": ["stone_1", "stone_2", "stone_3", "stone_4", "stone_5"],
         "material": "stone",
         "shade_axis": "none",
         "noise": 0.0,
@@ -158,12 +135,7 @@
     "part_reference_sources": {},
     "part_reference_composite": {},
     "motif_policy": "model_authored",
-    "accent_colors": [
-      "#B69A7B",
-      "#947C60",
-      "#746048",
-      "#564634"
-    ],
+    "accent_colors": ["#B69A7B", "#947C60", "#746048", "#564634"],
     "accent_budget": 70,
     "accent_min_cluster": 1,
     "accent_cleanup": true,
@@ -173,12 +145,7 @@
       "select": "chromatic",
       "chroma_min": 40,
       "brightest_percent": 100,
-      "ramp": [
-        "#B69A7B",
-        "#947C60",
-        "#746048",
-        "#564634"
-      ],
+      "ramp": ["#B69A7B", "#947C60", "#746048", "#564634"],
       "embed": 0.2,
       "rim": 0
     },
@@ -193,29 +160,23 @@
     {
       "path": "../refs/stone.png",
       "name": "stone",
-      "roles": [
-        "shape",
-        "material",
-        "pixel_style"
-      ],
+      "roles": ["shape", "material", "pixel_style"],
       "notes": [
         "group=minecraft:block/stone",
         "the base face: deliberately the SAME reference, palette and sampling mode as example_stone, so the two blocks share one stone by construction rather than by eye"
-      ]
+      ],
+      "class": "shallow_stone"
     },
     {
       "path": "../refs/iron_ore.png",
       "name": "iron_ore",
-      "roles": [
-        "shape",
-        "material",
-        "pixel_style"
-      ],
+      "roles": ["shape", "material", "pixel_style"],
       "notes": [
         "group=minecraft:block/iron_ore",
         "the DEPOSITS come from this: its own speck pixels are overlaid on the stone base, so the shapes, positions and values of the flecks are vanilla iron_ore's rather than hand-drawn crosses",
         "this is the reference the first delivery left out while the file sat unused on the reference root"
-      ]
+      ],
+      "class": "ore_deposit"
     }
   ]
 }

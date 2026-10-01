@@ -48,6 +48,8 @@ from .validation import (
     validate_geometry,
     validate_reference_contract,
     validate_reference_pool,
+    validate_reference_class,
+    validate_reference_notes,
     validate_render_alpha,
     validate_style,
 )
@@ -629,6 +631,11 @@ class GenerationPlan:
     # exist so the engine can say "you had iron_ore.png and did not attach it"
     # instead of drawing the asset and leaving that fact in a JSON field.
     available_references: list[ReferenceAsset] = field(default_factory=list)
+    # {plan name: [reference names it attached]}, for the sibling plans in the
+    # same family. A note that claims "this is the same reference X uses" is a
+    # factual claim about another plan, and the engine can only check it if it
+    # has that plan -- which is how a false claim survived in a real project.
+    sibling_references: dict[str, list[str]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.geometry.width != self.request.width or self.geometry.height != self.request.height:
@@ -1329,6 +1336,7 @@ class GenerationPipeline:
                     appearance=plan.appearance,
                     references=plan.references,
                     available_references=plan.available_references,
+                    sibling_references=plan.sibling_references,
                 )
         if plan.request.shape_policy == "reference":
             reference_geometry = reference_fallback_geometry(
@@ -1346,6 +1354,7 @@ class GenerationPipeline:
                     appearance=plan.appearance,
                     references=plan.references,
                     available_references=plan.available_references,
+                    sibling_references=plan.sibling_references,
                 )
         effective_repairer = self.repairer
         effective_max_repairs = self.max_geometry_repairs
@@ -1431,6 +1440,7 @@ class GenerationPipeline:
                         appearance=active_plan.appearance,
                         references=active_plan.references,
                         available_references=active_plan.available_references,
+                        sibling_references=active_plan.sibling_references,
                     )
                     partition_recovery = recovered_geometry
             except (KeyError, TypeError, ValueError):
@@ -1556,6 +1566,8 @@ class GenerationPipeline:
                     geometry=repaired,
                     appearance=active_plan.appearance,
                     references=active_plan.references,
+                    available_references=active_plan.available_references,
+                    sibling_references=active_plan.sibling_references,
                 )
             except Exception as exc:  # noqa: BLE001 - invalid model repairs must remain auditable
                 repair_result = ValidationResult(
@@ -1635,9 +1647,37 @@ class GenerationPipeline:
             [reference.name for reference in active_plan.available_references],
             asset=active_plan.request.name,
             waiver=active_plan.descriptor.reference_waiver,
+            declared_class=active_plan.descriptor.reference_class,
         )
         artifacts.append(_write_json(root / "validation_reference_pool.json", pool_result))
         for message in pool_result.errors:
+            print("WARNING: %s" % message)
+        # Is the reference that was CHOSEN the kind the asset claims to be? A
+        # shallow mist stone that attached deepslate.png passed every other gate:
+        # nothing compared a kind to a kind.
+        chosen_name = str((selection.get("chosen") or {}).get("name") or "")
+        class_result = validate_reference_class(
+            active_plan.descriptor.reference_class,
+            active_plan.descriptor.reference_layer,
+            active_plan.references,
+            chosen_name=chosen_name,
+            available=list(active_plan.available_references),
+            asset=active_plan.request.name,
+        )
+        artifacts.append(_write_json(root / "validation_reference_class.json", class_result))
+        for message in class_result.errors:
+            print("WARNING: %s" % message)
+        # Do the notes describe the reference they are attached to? A note copied
+        # from a sibling plan, or one that forbids the very reference it sits on,
+        # is checkable and shipped uncorrected.
+        notes_result = validate_reference_notes(
+            active_plan.references,
+            plan_references=active_plan.sibling_references,
+            available=list(active_plan.available_references),
+            asset=active_plan.request.name,
+        )
+        artifacts.append(_write_json(root / "validation_reference_notes.json", notes_result))
+        for message in notes_result.errors:
             print("WARNING: %s" % message)
         # A plan may widen a limit it is measured against -- but not quietly.
         # Needs the style metrics, so this runs after the style stage below.
@@ -1739,7 +1779,10 @@ class GenerationPipeline:
             expected_mask=entity_alpha_contract.alpha if entity_alpha_contract is not None else compiled.mask,
         )
         final_result = aggregate_results(
-            [pre_render, render_result, style_result, reference_result, pool_result, limits_result]
+            [
+                pre_render, render_result, style_result, reference_result, pool_result,
+                class_result, notes_result, limits_result,
+            ]
         )
         artifacts.extend(
             [

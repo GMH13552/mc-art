@@ -360,6 +360,82 @@ def _render(args: argparse.Namespace) -> int:
     return 0 if result.sprite_path and result.validation.passed else 1
 
 
+def _refclass(args: argparse.Namespace) -> int:
+    """Print the class table, classify the names given, or audit a plans directory.
+
+    The table is printed because it is a published rule, not an implementation
+    detail: if the engine's idea of "deep" differs from yours, you should be able
+    to read it rather than infer it from a failed gate.
+    """
+    from .planfile import plan_from_file, sibling_references
+    from .refclass import classify, describe_layers, describe_table, layer_of
+
+    print("REFERENCE CLASS TABLE (first match wins)")
+    for name, patterns in describe_table():
+        print("  %-14s %s" % (name, patterns))
+    print()
+    print("LAYER RULES")
+    for name, patterns in describe_layers():
+        print("  %-14s %s" % (name, patterns))
+    print("  %-14s (everything else follows from its class)" % "class default")
+    print()
+
+    failures = 0
+    for value in args.names:
+        print("  %-24s class=%-14s layer=%s" % (value, classify(value), layer_of(value)))
+
+    if args.plans:
+        directory = Path(args.plans)
+        print()
+        print("PLANS IN %s" % directory)
+        print("  %-24s %-22s %-14s %s" % ("plan", "attached reference", "class", "layer"))
+        for plan_path in sorted(directory.glob("*.plan.json")):
+            plan = plan_from_file(plan_path)
+            plan_name = plan_path.name[: -len(".plan.json")]
+            declared = plan.descriptor.reference_class or "-"
+            references = plan.references or []
+            if not references:
+                print("  %-24s %-22s %-14s %s" % (plan_name, "(none)", declared, "-"))
+                failures += 1
+                continue
+            # The declared class must be REPRESENTED among the references, not
+            # carried by each one: an ore's base rock is legitimately a different
+            # class, so flagging every base reference would cry wolf on a correct
+            # plan.
+            represented = any(
+                classify(reference.name) == plan.descriptor.reference_class
+                for reference in references
+            )
+            for reference in references:
+                derived = classify(reference.name)
+                print("  %-24s %-22s %-14s %s" % (
+                    plan_name, reference.name, derived, layer_of(reference.name)))
+            if plan.descriptor.reference_class and not represented:
+                print("  %-24s %s" % (
+                    "", "<-- declares %s, and NO attached reference is one"
+                    % plan.descriptor.reference_class))
+                failures += 1
+        print()
+        print("family view (declared class per plan) -- a plan whose attached references do not")
+        print("include the class it declares is the outlier, and it is marked:")
+        for plan_path in sorted(directory.glob("*.plan.json")):
+            plan = plan_from_file(plan_path)
+            plan_name = plan_path.name[: -len(".plan.json")]
+            attached = ", ".join(
+                "%s=%s" % (reference.name, classify(reference.name))
+                for reference in plan.references
+            ) or "(none)"
+            mark = ""
+            if plan.descriptor.reference_class and plan.references and not any(
+                classify(reference.name) == plan.descriptor.reference_class
+                for reference in plan.references
+            ):
+                mark = "   <-- OUTLIER: declares %s, attaches none" % plan.descriptor.reference_class
+            print("  %-24s declared=%-14s attached=%s%s" % (
+                plan_name, plan.descriptor.reference_class or "-", attached, mark))
+    return 1 if failures else 0
+
+
 def _why_reference(args: argparse.Namespace) -> int:
     """Say which reference will paint this canvas, and what the others scored.
 
@@ -1059,6 +1135,13 @@ def build_parser() -> argparse.ArgumentParser:
     why.add_argument("--plan", required=True)
     why.add_argument("--json", action="store_true")
     why.set_defaults(handler=_why_reference)
+
+    refclass = sub.add_parser(
+        "refclass",
+        help="print the published reference class/layer table, or classify names and plans")
+    refclass.add_argument("names", nargs="*", help="names to classify, e.g. deepslate iron_ore")
+    refclass.add_argument("--plans", help="a directory of *.plan.json to audit by class")
+    refclass.set_defaults(handler=_refclass)
 
     audit = sub.add_parser(
         "audit",

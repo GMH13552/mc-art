@@ -451,6 +451,12 @@ def _normalize_entity_appearance(
 def reference_from_dict(data: dict[str, Any]) -> ReferenceAsset:
     normalized = dict(data)
     normalized["roles"] = [ReferenceRole(role) for role in normalized.get("roles", [])]
+    # `class` is the natural key in a plan file; `declared_class` is the natural
+    # attribute in Python. Accept both so a hand-written plan reads well.
+    if "class" in normalized:
+        normalized.setdefault("declared_class", normalized.pop("class"))
+    if "layer" in normalized:
+        normalized.setdefault("declared_layer", normalized.pop("layer"))
     if not normalized.get("features"):
         source = Path(str(normalized.get("path", "")))
         if source.exists() and source.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
@@ -468,6 +474,10 @@ def plan_from_dict(data: dict[str, Any]) -> GenerationPlan:
         available_references=[
             reference_from_dict(item) for item in data.get("available_references", [])
         ],
+        sibling_references={
+            str(name): [str(entry) for entry in names]
+            for name, names in (data.get("sibling_references") or {}).items()
+        },
     )
 
 
@@ -516,7 +526,41 @@ def plan_from_file(path: str | Path) -> GenerationPlan:
             uv_layout_from_file((source.parent / str(layout_file)).resolve())
         )
         data["geometry"] = geometry
+    if not data.get("sibling_references"):
+        # The sibling plans sit beside this one. A note claiming "the same
+        # reference as <plan>" is a claim about a file the engine can read, so it
+        # is read rather than taken on trust -- which is how a false claim about
+        # another plan survived in a real project.
+        data = dict(data)
+        data["sibling_references"] = sibling_references(source.parent, exclude=source)
     return plan_from_dict(data)
+
+
+def sibling_references(
+    directory: str | Path, *, exclude: str | Path | None = None
+) -> dict[str, list[str]]:
+    """{plan stem: [reference names it attached]} for the plans beside this one.
+
+    Only the names are needed: the question a note raises is "is this the same
+    reference X uses", and the answer is the names X attached.
+    """
+    root = Path(directory)
+    excluded = Path(exclude).name if exclude else ""
+    found: dict[str, list[str]] = {}
+    if not root.is_dir():
+        return found
+    for candidate in sorted(root.glob("*.plan.json")):
+        if candidate.name == excluded:
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        stem = candidate.name[: -len(".plan.json")]
+        found[stem] = [
+            str(item.get("name", "")) for item in payload.get("references", []) or []
+        ]
+    return found
 
 
 def reference_from_spec(spec: str) -> ReferenceAsset:

@@ -38,7 +38,9 @@
     "reference_strategy": "Pattern-sample vanilla deepslate through the face's declared region so its layered banding survives at full contrast, then push the whole ramp down the value axis while keeping the same cool hue as example_stone. A deep variant is a value change, never a hue change.",
     "shape_edit_mode": "appearance_only",
     "reference_part_map": null,
-    "target_part_map": null
+    "target_part_map": null,
+    "class": "deep_stone",
+    "layer": "deep"
   },
   "geometry": {
     "width": 16,
@@ -142,7 +144,8 @@
       "notes": [
         "group=minecraft:block/deepslate",
         "the deep member of the family: layered banding, same cool hue, lower value"
-      ]
+      ],
+      "class": "deep_stone"
     }
   ]
 }

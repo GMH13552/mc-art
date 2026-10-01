@@ -37,7 +37,9 @@
     "reference_strategy": "Pattern-sample vanilla stone through the face's own declared region, so the mottling keeps its full local contrast, then map that value rhythm through this family's cool grey-blue ramp. The silhouette is a full opaque face; only the material changes.",
     "shape_edit_mode": "appearance_only",
     "reference_part_map": null,
-    "target_part_map": null
+    "target_part_map": null,
+    "class": "shallow_stone",
+    "layer": "shallow"
   },
   "geometry": {
     "width": 16,
@@ -141,7 +143,8 @@
       "notes": [
         "group=minecraft:block/stone",
         "the whole family is built from this one stone face; the ore reuses this exact reference, palette and sampling mode so its base comes out byte-identical"
-      ]
+      ],
+      "class": "shallow_stone"
     }
   ]
 }

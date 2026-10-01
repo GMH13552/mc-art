@@ -70,6 +70,28 @@ class ReferenceAsset:
     roles: list[ReferenceRole] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     features: dict[str, Any] = field(default_factory=dict)
+    # What this reference IS, from the published table in ``mc_art.refclass``
+    # (`shallow_stone`, `deep_stone`, `ore_deposit`, ...). Declared in the plan as
+    # `"class"`, because a name is not a kind: `smoke_mist_stone` attached
+    # `deepslate.png` and nothing could say the two disagreed.
+    declared_class: str = ""
+    # Which layer it belongs to (`shallow`, `deep`, `nether`, `end`). Derived
+    # separately from the class, because `deepslate_iron_ore` is an ore that lives
+    # deep, and flattening the two makes "wrong layer" unexpressible.
+    declared_layer: str = ""
+
+    @property
+    def engine_class(self) -> str:
+        """The class the engine derives from the name -- what the plan is checked against."""
+        from .refclass import classify
+
+        return classify(self.name)
+
+    @property
+    def engine_layer(self) -> str:
+        from .refclass import layer_of
+
+        return layer_of(self.name)
 
 
 @dataclass(frozen=True)
@@ -185,6 +207,16 @@ class ShapeDescriptor:
     # decision the engine can make, but "there is nothing to copy, and here is
     # why we are drawing it anyway" is one the caller has to state.
     reference_waiver: str = ""
+    # What KIND of thing this asset is, from the published table in
+    # ``mc_art.refclass``. The selected reference's derived class must equal this,
+    # so "the smoke mist stone is a shallow-layer stone" becomes checkable and a
+    # plan cannot quietly attach a deep reference to a shallow asset.
+    reference_class: str = ""
+    # Which layer the asset belongs to (`shallow`, `deep`, `nether`, `end`).
+    # Checked separately from the class for the same reason the reference carries
+    # both: an ore's class is `ore_deposit` wherever it sits, and its layer is
+    # what "wrong layer" is about.
+    reference_layer: str = ""
     # Attached by the orchestration layer after the reference-free director
     # pass. Geometry, appearance and review see the same immutable brief.
     art_direction: ArtDirection | None = None
@@ -624,6 +656,12 @@ def request_from_dict(data: dict[str, Any]) -> AssetRequest:
 def descriptor_from_dict(data: dict[str, Any]) -> ShapeDescriptor:
     normalized = dict(data)
     normalized["parts"] = [part_from_dict(item) for item in data["parts"]]
+    # `"class"` / `"layer"` read naturally in a plan; the attributes cannot use
+    # those names in Python, so accept both spellings.
+    if "class" in normalized:
+        normalized.setdefault("reference_class", normalized.pop("class"))
+    if "layer" in normalized:
+        normalized.setdefault("reference_layer", normalized.pop("layer"))
     if isinstance(normalized.get("art_direction"), dict):
         normalized["art_direction"] = art_direction_from_dict(normalized["art_direction"])
     edit_mode = str(normalized.get("shape_edit_mode", "model_decides")).strip().lower()
