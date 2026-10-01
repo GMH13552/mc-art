@@ -76,7 +76,7 @@ def test_an_unknown_name_is_admitted_rather_than_guessed() -> None:
 # -- gate A: the class the plan declared -------------------------------------
 
 def test_a_shallow_asset_that_attached_a_deep_reference_is_refused() -> None:
-    """The real smoke_mist_stone, isolated.
+    """The real example_mist_stone, isolated.
 
     It declared itself a shallow-layer stone and attached deepslate.png, while its
     own note said the shallow variant "must NOT be chosen".
@@ -87,7 +87,7 @@ def test_a_shallow_asset_that_attached_a_deep_reference_is_refused() -> None:
         [_ref("deepslate")],
         chosen_name="deepslate",
         available=[_ref("stone")],
-        asset="smoke_mist_stone",
+        asset="example_mist_stone",
     )
     assert result.passed is False
     assert "declares class 'shallow_stone'" in result.errors[0]
@@ -98,7 +98,7 @@ def test_a_shallow_asset_that_attached_a_deep_reference_is_refused() -> None:
 
 
 def test_a_base_plus_deposit_plan_is_not_refused_for_attaching_the_base() -> None:
-    """starfall_ore is an ore whose rock is deepslate.
+    """example_starfall_ore is an ore whose rock is deepslate.
 
     The declared class is the ore's, and the base is legitimately a different
     class -- requiring the chosen reference to carry it would refuse a correct
@@ -110,7 +110,7 @@ def test_a_base_plus_deposit_plan_is_not_refused_for_attaching_the_base() -> Non
         [_ref("deepslate"), _ref("iron_ore")],
         chosen_name="deepslate",
         available=[],
-        asset="starfall_ore",
+        asset="example_starfall_ore",
     )
     assert result.passed is True, result.errors
 
@@ -139,7 +139,7 @@ def test_declaring_nothing_is_reported_as_unchecked() -> None:
 # -- gate B: do the notes describe the reference they sit on -----------------
 
 def test_a_note_that_forbids_the_reference_it_is_attached_to_is_refused() -> None:
-    """mist_stone: a shallow stone carrying the note copied from abyss_stone."""
+    """example_shallow_stone: a shallow stone carrying the note copied from example_deep_stone."""
     note = (
         "same layer, same material role; a shallow-layer stone reference is the fault "
         "that already shipped once and must not be chosen"
@@ -151,7 +151,7 @@ def test_a_note_that_forbids_the_reference_it_is_attached_to_is_refused() -> Non
 
 
 def test_the_same_note_on_the_correct_reference_is_accepted() -> None:
-    """abyss_stone carries the identical sentence and is right to.
+    """example_deep_stone carries the identical sentence and is right to.
 
     The note forbids a SHALLOW stone; this reference is a deep one, so it forbids
     nothing that is here.
@@ -165,13 +165,13 @@ def test_the_same_note_on_the_correct_reference_is_accepted() -> None:
 
 
 def test_a_false_claim_about_another_plans_reference_is_refused() -> None:
-    """starfall_ore claims mist_stone's reference; mist_stone uses stone."""
+    """example_starfall_ore claims example_shallow_stone's reference; example_shallow_stone uses stone."""
     note = (
-        "This is the same reference mist_stone uses, so the ore's rock is the family's rock"
+        "This is the same reference example_shallow_stone uses, so the ore's rock is the family's rock"
     )
     result = validate_reference_notes(
         [_ref("deepslate", [note]), _ref("iron_ore")],
-        plan_references={"mist_stone": ["stone"]},
+        plan_references={"example_shallow_stone": ["stone"]},
     )
     assert result.passed is False
     assert "the claim is false" in result.errors[0]
@@ -179,9 +179,9 @@ def test_a_false_claim_about_another_plans_reference_is_refused() -> None:
 
 
 def test_the_same_claim_passes_when_it_is_true() -> None:
-    note = "This is the same reference mist_stone uses"
+    note = "This is the same reference example_shallow_stone uses"
     result = validate_reference_notes(
-        [_ref("stone", [note])], plan_references={"mist_stone": ["stone"]}
+        [_ref("stone", [note])], plan_references={"example_shallow_stone": ["stone"]}
     )
     assert result.passed is True, result.errors
 
@@ -209,7 +209,7 @@ def test_a_note_arguing_for_a_different_reference_is_refused() -> None:
 
 
 def test_an_uncheckable_cross_plan_claim_is_reported_not_assumed_true() -> None:
-    note = "the same reference as mist_stone"
+    note = "the same reference as example_shallow_stone"
     result = validate_reference_notes([_ref("stone", [note])], plan_references={})
     assert result.passed is False
     assert "could not be checked" in result.errors[0]
@@ -218,7 +218,7 @@ def test_an_uncheckable_cross_plan_claim_is_reported_not_assumed_true() -> None:
 # -- the four real plans together --------------------------------------------
 
 def test_the_four_real_plans_refuse_exactly_the_three_that_are_wrong() -> None:
-    """abyss_stone is clean; the other three are contradictions.
+    """example_deep_stone is clean; the other three are contradictions.
 
     This is the end-to-end shape: the gates must be sharp enough to pass the one
     plan that is right, or nobody will trust them on the three that are not.
@@ -239,10 +239,10 @@ def test_the_four_real_plans_refuse_exactly_the_three_that_are_wrong() -> None:
             # `.stem` strips one suffix, so `x.plan.json` would key as `x.plan`.
             verdicts[plan_path.name[: -len(".plan.json")]] = run.validation.passed
 
-    assert verdicts["abyss_stone"] is True, verdicts
-    assert verdicts["mist_stone"] is False, verdicts
-    assert verdicts["smoke_mist_stone"] is False, verdicts
-    assert verdicts["starfall_ore"] is False, verdicts
+    assert verdicts["example_deep_stone"] is True, verdicts
+    assert verdicts["example_shallow_stone"] is False, verdicts
+    assert verdicts["example_mist_stone"] is False, verdicts
+    assert verdicts["example_starfall_ore"] is False, verdicts
 
 
 def test_the_shipped_family_declares_its_class_and_passes() -> None:

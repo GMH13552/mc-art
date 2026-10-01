@@ -622,7 +622,7 @@ def validate_reference_class(
 ) -> ValidationResult:
     """Is the reference that was actually chosen the KIND the plan declared?
 
-    A real project's ``smoke_mist_stone`` -- a shallow mist stone -- attached
+    A real project's ``example_mist_stone`` -- a stone declared *shallow* -- attached
     ``deepslate.png``, and its own note said the shallow variant was available and
     "must NOT be chosen". The candidate table could not see it: it scored roles,
     alpha overlap and how many words two filenames share, and "deep" against
@@ -676,7 +676,7 @@ def validate_reference_class(
     # 2a. Is the declared class REPRESENTED among the attached references?
     #
     # Not "is the globally-chosen one that class": a base+deposit plan declares the
-    # deposit's class and legitimately attaches the base too. `starfall_ore` is an
+    # deposit's class and legitimately attaches the base too. `example_starfall_ore` is an
     # ore whose rock is deepslate, so its references are deepslate AND iron_ore, and
     # the ore is what makes it an ore. Requiring the chosen reference to carry the
     # class would refuse a correct plan.
@@ -796,7 +796,7 @@ _CHOICE_VERB = re.compile(
     re.IGNORECASE,
 )
 
-# "this is the same reference mist_stone uses" -- a claim about another plan that
+# "this is the same reference example_shallow_stone uses" -- a claim about another plan that
 # the engine can check, because it has that plan.
 _SAME_AS_PLAN = re.compile(
     r"\b(?:same|identical)\s+reference\s+(?:as|that)\s+(?:plan\s+)?[`\"']?([A-Za-z0-9_.\-]+)",

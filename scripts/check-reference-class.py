@@ -9,16 +9,16 @@ originals were vanilla art and this repository does not redistribute it.
 
 What went wrong, and which gate now catches it:
 
-  smoke_mist_stone   a SHALLOW mist stone that attached deepslate.png, with a note
-                     saying the shallow variant "must NOT be chosen"
-                     -> class gate: declared shallow, attached deep
-  mist_stone         attached stone.png (shallow, correct) but carries the note
-                     copied from abyss_stone, which forbids the shallow stone
-                     -> note gate: the note forbids the reference it sits on
-  starfall_ore       note claims "the same reference mist_stone uses", but
-                     mist_stone uses stone and this plan uses deepslate
-                     -> note gate: the claim is checked against that plan
-  abyss_stone        attached deepslate.png, the note matches -- correct
+  example_mist_stone    a SHALLOW-declared stone that attached deepslate.png, with a
+                        note saying the shallow variant "must NOT be chosen"
+                        -> class gate: declared shallow, attached deep
+  example_shallow_stone attached stone.png (shallow, correct) but carries the note
+                        copied from example_deep_stone, which forbids the shallow stone
+                        -> note gate: the note forbids the reference it sits on
+  example_starfall_ore  note claims "the same reference example_shallow_stone uses", but
+                        example_shallow_stone uses stone and this plan uses deepslate
+                        -> note gate: the claim is checked against that plan
+  example_deep_stone    attached deepslate.png, the note matches -- correct
 """
 
 from __future__ import annotations
@@ -135,19 +135,19 @@ def build_fixture_tree(root: Path) -> Path:
     plans.mkdir(parents=True, exist_ok=True)
     _write_refs(root / "refs")
     for name, declared, reference, note, extra in (
-        # mist_stone: shallow asset, shallow reference -- correct choice, but the
-        # note it carries was copied from abyss_stone and forbids that choice.
-        ("mist_stone", "shallow_stone", "stone", SHALLOW_IS_FORBIDDEN, None),
-        # abyss_stone: the note belongs here, and it matches.
-        ("abyss_stone", "deep_stone", "deepslate", SHALLOW_IS_FORBIDDEN, None),
-        # smoke_mist_stone: a SHALLOW asset that took the DEEP reference, and wrote
+        # example_shallow_stone: shallow asset, shallow reference -- correct choice, but the
+        # note it carries was copied from example_deep_stone and forbids that choice.
+        ("example_shallow_stone", "shallow_stone", "stone", SHALLOW_IS_FORBIDDEN, None),
+        # example_deep_stone: the note belongs here, and it matches.
+        ("example_deep_stone", "deep_stone", "deepslate", SHALLOW_IS_FORBIDDEN, None),
+        # example_mist_stone: a SHALLOW asset that took the DEEP reference, and wrote
         # "the shallow variant must NOT be chosen" into the plan.
-        ("smoke_mist_stone", "shallow_stone", "deepslate", DEEP_IS_REQUIRED, None),
-        # starfall_ore: deepslate base plus iron_ore deposits (as the real plan
-        # had), claiming to use the same reference as mist_stone. It does not.
+        ("example_mist_stone", "shallow_stone", "deepslate", DEEP_IS_REQUIRED, None),
+        # example_starfall_ore: deepslate base plus iron_ore deposits (as the real plan
+        # had), claiming to use the same reference as example_shallow_stone. It does not.
         (
-            "starfall_ore", "ore_deposit", "deepslate",
-            "This is the same reference mist_stone uses, so the ore's rock is the family's rock",
+            "example_starfall_ore", "ore_deposit", "deepslate",
+            "This is the same reference example_shallow_stone uses, so the ore's rock is the family's rock",
             "iron_ore",
         ),
     ):
@@ -201,26 +201,26 @@ def main() -> int:
             print("REVERSE FIXTURE A: a shallow asset that attaches the deep reference")
             root = scratch / "a"
             _write_refs(root / "refs")
-            _fixture(root, "smoke_mist_stone", "shallow_stone", "deepslate", DEEP_IS_REQUIRED)
-            a = run(root / "plans", root / "out", "smoke_mist_stone (declared shallow, attached deepslate)")
+            _fixture(root, "example_mist_stone", "shallow_stone", "deepslate", DEEP_IS_REQUIRED)
+            a = run(root / "plans", root / "out", "example_mist_stone (declared shallow, attached deepslate)")
             print()
 
             print("REVERSE FIXTURE B: a note that forbids the reference it is attached to")
             root = scratch / "b"
             _write_refs(root / "refs")
-            _fixture(root, "mist_stone", "shallow_stone", "stone", SHALLOW_IS_FORBIDDEN)
-            b = run(root / "plans", root / "out", "mist_stone (shallow stone, note forbids the shallow stone)")
+            _fixture(root, "example_shallow_stone", "shallow_stone", "stone", SHALLOW_IS_FORBIDDEN)
+            b = run(root / "plans", root / "out", "example_shallow_stone (shallow stone, note forbids the shallow stone)")
             print()
 
             print("REVERSE FIXTURE C: a note claiming another plan's reference, falsely")
             root = scratch / "c"
             _write_refs(root / "refs")
-            _fixture(root, "mist_stone", "shallow_stone", "stone", SHALLOW_IS_FORBIDDEN)
+            _fixture(root, "example_shallow_stone", "shallow_stone", "stone", SHALLOW_IS_FORBIDDEN)
             _fixture(
-                root, "starfall_ore", "ore_deposit", "deepslate",
-                "This is the same reference mist_stone uses, so the ore's rock is the family's rock",
+                root, "example_starfall_ore", "ore_deposit", "deepslate",
+                "This is the same reference example_shallow_stone uses, so the ore's rock is the family's rock",
             )
-            c = run(root / "plans", root / "out", "starfall_ore (claims mist_stone's reference)")
+            c = run(root / "plans", root / "out", "example_starfall_ore (claims example_shallow_stone's reference)")
 
             every = a >= 1 and b >= 1 and c >= 1
             print()
@@ -232,7 +232,7 @@ def main() -> int:
         plans = build_fixture_tree(scratch)
         problems = run(plans, scratch / "out", "the four plans from the real project")
         print()
-        print("Expected: smoke_mist_stone, mist_stone and starfall_ore refused; abyss_stone clean.")
+        print("Expected: example_mist_stone, example_shallow_stone and example_starfall_ore refused; example_deep_stone clean.")
         print("The engine cannot fix these -- they are contradictions in the plans, and the")
         print("author has to decide what each asset actually is.")
         return 0 if problems == 3 else 1

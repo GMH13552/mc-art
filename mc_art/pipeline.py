@@ -1653,7 +1653,7 @@ class GenerationPipeline:
         for message in pool_result.errors:
             print("WARNING: %s" % message)
         # Is the reference that was CHOSEN the kind the asset claims to be? A
-        # shallow mist stone that attached deepslate.png passed every other gate:
+        # shallow-layer stone that attached deepslate.png passed every other gate:
         # nothing compared a kind to a kind.
         chosen_name = str((selection.get("chosen") or {}).get("name") or "")
         class_result = validate_reference_class(

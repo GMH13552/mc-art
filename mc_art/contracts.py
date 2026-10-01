@@ -72,7 +72,7 @@ class ReferenceAsset:
     features: dict[str, Any] = field(default_factory=dict)
     # What this reference IS, from the published table in ``mc_art.refclass``
     # (`shallow_stone`, `deep_stone`, `ore_deposit`, ...). Declared in the plan as
-    # `"class"`, because a name is not a kind: `smoke_mist_stone` attached
+    # `"class"`, because a name is not a kind: `example_mist_stone` attached
     # `deepslate.png` and nothing could say the two disagreed.
     declared_class: str = ""
     # Which layer it belongs to (`shallow`, `deep`, `nether`, `end`). Derived
@@ -209,7 +209,7 @@ class ShapeDescriptor:
     reference_waiver: str = ""
     # What KIND of thing this asset is, from the published table in
     # ``mc_art.refclass``. The selected reference's derived class must equal this,
-    # so "the smoke mist stone is a shallow-layer stone" becomes checkable and a
+    # so "this stone really is the shallow-layer kind it claims" becomes checkable and a
     # plan cannot quietly attach a deep reference to a shallow asset.
     reference_class: str = ""
     # Which layer the asset belongs to (`shallow`, `deep`, `nether`, `end`).

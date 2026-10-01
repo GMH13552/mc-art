@@ -1,8 +1,8 @@
 """What KIND of thing a reference is -- as data the plan declares and the engine checks.
 
 The gap this closes. A real project shipped four plans in which one asset
-(``smoke_mist_stone``, a *shallow* mist stone) attached ``deepslate.png``, and its
-own note said "the shallow variant is available in the same reference root and
+(``example_mist_stone``, a stone declared *shallow*) attached ``deepslate.png``, and
+its own note said "the shallow variant is available in the same reference root and
 must NOT be chosen". Its choice contradicted its stated reason, and nothing could
 tell:
 
