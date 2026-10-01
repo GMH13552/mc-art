@@ -28,8 +28,10 @@ tests/              182 tests over the engine
 Run them with `python -m pytest tests -q`. On a Windows box where
 `%TEMP%\pytest-of-GMH13` is a stale directory owned by another account, pytest
 cannot create its default temp root and reports a page of `PermissionError` that
-has nothing to do with this repository — pass `--basetemp=.pytest-tmp` (already
-gitignored).
+has nothing to do with this repository — pass a temp root **outside this
+directory**, e.g. `--basetemp="$env:TEMP\mc-art-pytest"`. Scratch left inside the
+tree gets copied by anything that vendors this skill wholesale, absolute paths
+and all.
 
 ## Who decides: you, or the engine
 

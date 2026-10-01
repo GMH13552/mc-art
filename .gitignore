@@ -14,5 +14,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# Local pytest scratch (the machine's %TEMP% can be unusable for a fresh user)
+# Local scratch. Ignored is not enough on its own: anything that copies this
+# directory wholesale (the DSH panel vendors bundled skills that way) carries
+# ignored files too. `__pycache__/*.pyc` embeds the absolute path it was
+# compiled from and pytest scratch carries absolute paths in its JSON, so keep
+# the temp root OUTSIDE the tree and run `git clean -Xfd` before packaging.
 .pytest-tmp/
+.pytest-of-*/
