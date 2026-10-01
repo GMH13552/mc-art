@@ -1132,6 +1132,8 @@ def family_axes(
     maximum_accent_hue_span_deg: float = 14.0,
     maximum_accent_saturation_span: float = 0.30,
     minimum_accent_pixels: int = 4,
+    member_accent_colors: dict[str, Sequence[object]] | None = None,
+    accent_axis_members: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Measure whether a set of sprites shares one material axis and one accent.
 
@@ -1150,17 +1152,47 @@ def family_axes(
     failures, because two unrelated materials often share a great many quantised
     colours. This is the axis test instead of the histogram test.
     """
+    member_accent_colors = member_accent_colors or {}
     rows = [
-        sprite_axes(sprite, accent_colors=accent_colors, base_colors=base_colors, palette=palette)
+        sprite_axes(
+            sprite,
+            # Each member is measured with the accent colours IT declared. Handing
+            # one union list to every member measures them against colours they
+            # never declared, which is how a family reported a saturation span
+            # driven by a swatch no member actually used.
+            accent_colors=member_accent_colors.get(str(sprite)) or accent_colors,
+            base_colors=base_colors,
+            palette=palette,
+        )
         for sprite in sprites
     ]
+    # Only the members that carry an accent take part in the accent-consistency
+    # check. Vanilla does not share one accent across ore, ingot and stone --
+    # iron_ore's specks are earth-brown, iron_ingot is grey metal, stone is
+    # neutral -- so binding a metal item to the ore's amber measures a rule this
+    # project invented rather than the game's own style. The metal members are
+    # covered by the material axes below, which is where they belong.
+    accent_scope = (
+        {str(name) for name in accent_axis_members}
+        if accent_axis_members is not None
+        else None
+    )
+    def _on_accent_axis(row: dict[str, Any]) -> bool:
+        if accent_scope is not None:
+            return str(row["sprite"]) in accent_scope
+        if member_accent_colors:
+            return str(row["sprite"]) in {str(name) for name in member_accent_colors}
+        return True
+
     hues = [row["hue_turns"] for row in rows if row["hue_turns"] is not None]
     lumas = [row["luma_mean"] for row in rows]
     chromas = [row["chroma_mean"] for row in rows]
     accent_hues = [
         row["accent_hue_turns"]
         for row in rows
-        if row["accent_pixels"] >= minimum_accent_pixels and row["accent_hue_turns"] is not None
+        if row["accent_pixels"] >= minimum_accent_pixels
+        and row["accent_hue_turns"] is not None
+        and _on_accent_axis(row)
     ]
     hue_span_deg = round(circular_span(hues) * 360.0, 1) if len(hues) >= 2 else None
     luma_span = round(max(lumas) - min(lumas), 2) if len(lumas) >= 2 else None
@@ -1177,6 +1209,7 @@ def family_axes(
         for row in rows
         if row["accent_pixels"] >= minimum_accent_pixels
         and row.get("accent_saturation_mean") is not None
+        and _on_accent_axis(row)
     ]
     accent_sat_span = (
         round(max(value for _name, value in accent_sats) - min(value for _name, value in accent_sats), 4)

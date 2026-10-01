@@ -53,6 +53,13 @@ REFERENCE_GROUPS = {
     "raw_iron": "minecraft:item/raw_iron",
 }
 
+# Members that carry the family's accent, and are therefore the only ones the
+# accent-consistency axes may judge. The metal members belong to the material
+# axis instead: vanilla's iron_ingot is grey metal with no warm accent at all,
+# and forcing it to share the ore's amber is what produced "orange paint on grey
+# metal" in the first place.
+ACCENT_AXIS_MEMBERS = ("example_ore", "example_deepslate_ore")
+
 # Reference row for the sheet, then the generated family, in family order.
 REFERENCE_ROW = ("stone", "deepslate", "iron_ore", "iron_ingot", "raw_iron")
 FAMILY = (
@@ -233,10 +240,22 @@ def measure(results: dict[str, dict]) -> dict:
             accent_base_gap_max=None,
             accent_base_edge_mean_max=None,
         )
+    # Each member's OWN accent colours, and the accent axis is scoped to the
+    # members that carry one. Vanilla shares no accent between ore, ingot and
+    # stone, so binding the metal item to the ore's amber would be measuring a
+    # rule this project invented.
+    member_accents = {
+        str(results[name]["sprite"]): results[name]["declared_accent_colors"]
+        for name in FAMILY
+        if results[name]["sprite"] and results[name]["declared_accent_colors"]
+        and name in ACCENT_AXIS_MEMBERS
+    }
     return family_axes(
         sprites,
         accent_colors=family_accents or ACCENT_SWATCHES,
         base_colors=results["example_stone"]["declared_base_colors"],
+        member_accent_colors=member_accents,
+        accent_axis_members=sorted(member_accents),
     )
 
 

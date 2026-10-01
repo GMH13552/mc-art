@@ -166,35 +166,35 @@
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_colors": [
-      "#F0BE6E",
-      "#DFA855",
-      "#CF9440",
-      "#8E5C1C"
+      "#8E6B44",
+      "#7C5C39",
+      "#6A4E2F",
+      "#553E25"
     ],
     "accent_budget": 70,
     "accent_min_cluster": 1,
     "accent_cleanup": true,
-    "accent_edge_max": 130,
-    "threshold_waiver": "the deposits are vanilla iron_ore mask and value order mapped onto the family ramp, over the deeper, darker rock of example_deepslate, so both the accent-to-base step (measured ~120) and the local step are larger than on the shallower stone. The family reference of 60/30 is calibrated against the lighter base. Declared so the relaxation is visible rather than silent.",
+    "accent_edge_max": 60,
     "accent_from_reference": {
       "source": "iron_ore",
       "select": "chromatic",
       "chroma_min": 40,
       "brightest_percent": 100,
       "ramp": [
-        "#F0BE6E",
-        "#DFA855",
-        "#CF9440",
-        "#8E5C1C"
+        "#8E6B44",
+        "#7C5C39",
+        "#6A4E2F",
+        "#553E25"
       ],
-      "embed": 0.74,
+      "embed": 0.35,
       "rim": 0
     },
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 40,
     "accent_motif_repeat_max": null,
     "accent_ramp_min_levels": null,
-    "accent_ramp_min_monotone": null
+    "accent_ramp_min_monotone": null,
+    "accent_ramp_max_dominant_share": null
   },
   "references": [
     {
