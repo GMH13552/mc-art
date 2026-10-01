@@ -25,8 +25,8 @@ scripts/            magnify / review_family / continuity
 tests/              182 tests over the engine
 ```
 
-Run them with `python -m pytest tests -q`. On a Windows box where
-`%TEMP%\pytest-of-GMH13` is a stale directory owned by another account, pytest
+Run them with `python -m pytest tests -q`. On a Windows box with a stale
+`pytest-of-<user>` directory under `%TEMP%` that your account cannot read, pytest
 cannot create its default temp root and reports a page of `PermissionError` that
 has nothing to do with this repository — pass a temp root **outside this
 directory**, e.g. `--basetemp="$env:TEMP\mc-art-pytest"`. Scratch left inside the

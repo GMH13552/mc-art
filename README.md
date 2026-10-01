@@ -77,10 +77,11 @@ stretched planks.
 python -m pytest tests -q
 ```
 
-On a Windows machine where `%TEMP%\pytest-of-GMH13` is a stale directory owned by
-another account, pytest cannot create its default temp root and reports a page of
-`PermissionError` that has nothing to do with this repository. Pass a temp root
-you own instead — **outside this directory**:
+On a Windows machine with a stale `pytest-of-<user>` directory under `%TEMP%`
+that your account cannot read — one left behind by another user — pytest cannot
+create its default temp root and reports a page of `PermissionError` that has
+nothing to do with this repository. Pass a temp root you own instead, **outside
+this directory**:
 
 ```bash
 python -m pytest tests -q --basetemp="$TEMP/mc-art-pytest"     # bash

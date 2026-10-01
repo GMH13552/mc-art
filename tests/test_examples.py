@@ -8,7 +8,9 @@ These checks need no game jar: they read the plan JSON and the block spec.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -22,11 +24,42 @@ BLOCK = EXAMPLES / "example_block_entity"
 
 FAMILY_PLANS = sorted(FAMILY.glob("*.plan.json"))
 
-# Names that must never reach a shipped file. Deliberately a short list of the
-# markers this repository has already had to scrub once.
-PRIVATE_MARKERS = (
-    "the_nameless_mist", "fleshland", "eyeball", "/home/gmh", "118mod_adventure",
-    "starfall", "abyss_stone", "mist_stone",
+# The project-specific half of the privacy check reads its word list from
+# OUTSIDE the repository, because a blocklist that names the projects it forbids
+# is itself the leak: the first version of this file spelled them out, which is
+# exactly the thing the rule exists to prevent. Mirrors panel/private-markers.txt
+# in the host repository, which is untracked for the same reason.
+#
+#   MCART_PRIVATE_MARKERS="alpha,beta" python -m pytest tests -q
+#   or an untracked private-markers.txt at the repository root, one name per line
+#
+# With neither configured, the generic checks below still run and the test says
+# so rather than passing silently.
+MARKER_FILE = EXAMPLES.parent / "private-markers.txt"
+
+
+def private_markers() -> list[str]:
+    from_env = [item.strip() for item in os.environ.get("MCART_PRIVATE_MARKERS", "").split(",")]
+    markers = [item for item in from_env if item]
+    if markers:
+        return markers
+    if MARKER_FILE.exists():
+        return [
+            line.strip()
+            for line in MARKER_FILE.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+    return []
+
+
+# Generic leaks that need no word list. The drive-letter form must catch a
+# Windows drive prefix but not a URL scheme, because a scheme separator is also
+# a colon followed by a slash. Requiring a non-alphanumeric character (or the
+# start of the text) before the drive letter is what tells the two apart. This
+# paragraph deliberately spells no example path: a scanner would flag it.
+GENERIC_LEAKS = (
+    ("absolute Windows path", re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]")),
+    ("absolute home directory path", re.compile(r"/(?:home|Users)/[A-Za-z0-9_.-]+/")),
 )
 
 
@@ -111,16 +144,84 @@ def test_the_desk_example_passes_its_own_uv_audit_and_a_fault_fails() -> None:
 
 
 def test_no_shipped_example_mentions_a_private_project_or_a_machine_path() -> None:
+    """Scan every tracked example file for a leak, and say which rule caught it.
+
+    Two layers on purpose. The generic patterns always run, because an absolute
+    path is a leak regardless of what the project is called. The project-specific
+    word list runs only when one is configured from outside the repository (see
+    ``private_markers``) — a test cannot both forbid a name and contain it.
+    """
+    markers = private_markers()
     offenders: list[str] = []
-    for path in list(EXAMPLES.rglob("*")):
+    scanned = 0
+    for path in sorted(EXAMPLES.rglob("*")):
         if not path.is_file() or path.suffix not in {".json", ".py", ".md"}:
             continue
-        if "refs" in path.parts or "out" in path.parts or "textures" in path.parts:
+        if {"refs", "out", "textures"} & set(path.parts):
             continue
+        scanned += 1
         text = path.read_text(encoding="utf-8")
-        for marker in PRIVATE_MARKERS:
+        for marker in markers:
             if marker in text:
-                offenders.append("%s: %s" % (path, marker))
-        for match in re.finditer(r"[A-Za-z]:\\", text):
-            offenders.append("%s: absolute Windows path at offset %d" % (path, match.start()))
+                offenders.append("%s: word-list hit %r" % (path, marker))
+        for label, pattern in GENERIC_LEAKS:
+            for match in pattern.finditer(text):
+                offenders.append("%s: %s at offset %d" % (path, label, match.start()))
+    assert scanned >= 6, "the example scan found almost nothing, so it proves nothing"
     assert not offenders, offenders
+    if not markers:
+        # Report the reduced coverage instead of letting a green run imply the
+        # project-specific half ran.
+        print(
+            "note: generic leak patterns only; set MCART_PRIVATE_MARKERS or write "
+            "%s to also check project-specific names" % MARKER_FILE
+        )
+
+
+def _leak_sample() -> str:
+    """A string that trips both generic patterns, assembled from parts.
+
+    A test that plants a literal drive path to prove the pattern fires would
+    itself contain one: the scanner it is testing would flag this file, and a
+    public repository would carry the planted path forever. So both halves are
+    built at runtime and the source never holds a complete path.
+    """
+    backslash = chr(92)
+    drive = "C" + ":" + backslash + "Users" + backslash + "someone"
+    home = "/" + "home" + "/" + "someone" + "/demo/"
+    return drive + "  " + home
+
+
+def test_the_generic_leak_patterns_actually_match_a_leak() -> None:
+    """The scan above is only worth having if its patterns can fire — and stop."""
+    planted = _leak_sample()
+    caught = {label for label, pattern in GENERIC_LEAKS if pattern.search(planted)}
+    assert caught == {label for label, _pattern in GENERIC_LEAKS}, caught
+
+    # ...and it must not fire on ordinary content, or a green scan means nothing
+    # because everything is red. A URL is the case that bit: its scheme
+    # separator is a colon preceded by a letter and followed by a slash, which a
+    # naive drive-letter pattern reads as a path. (Written out here on purpose:
+    # this is the input that must stay clean, not a leak.)
+    clean = (
+        "examples/example_stone/sprite.png  https://github.com/example/mc-art"
+        "  see ../../README.md and python examples/example_family/build.py"
+    )
+    for label, pattern in GENERIC_LEAKS:
+        assert not pattern.search(clean), (label, clean)
+
+
+def test_the_word_list_half_fires_when_it_is_configured(monkeypatch, tmp_path) -> None:
+    """A/B: configured, a word list is read; unconfigured, the half is skipped."""
+    monkeypatch.delenv("MCART_PRIVATE_MARKERS", raising=False)
+    monkeypatch.setattr(sys.modules[__name__], "MARKER_FILE", tmp_path / "absent.txt")
+    assert private_markers() == []
+
+    monkeypatch.setenv("MCART_PRIVATE_MARKERS", "alpha, beta")
+    assert private_markers() == ["alpha", "beta"]
+
+    monkeypatch.delenv("MCART_PRIVATE_MARKERS")
+    written = tmp_path / "private-markers.txt"
+    written.write_text("# comment\n\ngamma\n", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "MARKER_FILE", written)
+    assert private_markers() == ["gamma"]
