@@ -437,6 +437,10 @@ class AppearanceSpec:
     accent_bar_fill_max: float | None = 0.75
     accent_bar_min_aspect: float | None = 1.8
     accent_bar_min_pixels: int | None = 10
+    # Embedded or pasted on. Vanilla iron_ore measures accent-base gap 12.2 and
+    # accent-boundary step mean 23.3 -- its flecks nearly dissolve in their stone.
+    accent_base_gap_max: float | None = 20.0
+    accent_base_edge_mean_max: float | None = 35.0
     # Where the accent comes from. When set, the accent is not authored pixels at
     # all: the engine takes the brightest ``brightest_percent`` of the named
     # reference's own luminance inside the mask and maps them, brightest first,

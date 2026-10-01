@@ -1,25 +1,25 @@
 {
   "request": {
-    "query": "example ore: the same stone, with warm star-metal deposits instead of ugly dots",
+    "query": "example deepslate ore: example_deepslate's own face, with the same star-metal deposits as example_ore",
     "form": "custom",
-    "name": "example_ore",
+    "name": "example_deepslate_ore",
     "namespace": "examplepack",
     "width": 16,
     "height": 16,
     "novelty": 0.2,
     "target_path": null,
     "shape_policy": "planned",
-    "seed": 11,
+    "seed": 15,
     "pack_format": 15
   },
   "descriptor": {
-    "target": "example ore block face",
-    "semantic": "A 16x16 opaque block face: example_stone's own face, with four star-metal deposits. Each deposit is a small cluster with its own light core and dark rim, so it reads as a mineral fleck rather than a lone dot.",
+    "target": "example deepslate ore block face",
+    "semantic": "A 16x16 opaque block face: example_deepslate’s own deep rock, carrying exactly the same deposits as example_ore — same mask, same value order, same family ramp.",
     "visual_identity": [
       "16x16 opaque block face, no transparency",
-      "every non-deposit pixel is byte-identical to example_stone",
-      "four deposits, each with an internal light-to-dark ramp",
-      "the deposits are the face's only accent pixels"
+      "every non-deposit pixel is byte-identical to example_deepslate",
+      "the deposits are iron_ore’s own mask and value order, as in example_ore",
+      "the accent ramp is the family’s"
     ],
     "parts": [
       {
@@ -44,7 +44,7 @@
       "moss"
     ],
     "orientation": "flat, tiles seamlessly",
-    "reference_strategy": "Take example_stone's exact reference, palette and sampling mode so the base face is the same stone by construction, then place four deposits with an explicit pixel map. Declaring the accent swatches, a pixel budget and a minimum deposit size turns 'don't use ugly dots' into something the render can be held to.",
+    "reference_strategy": "Identical deposition to example_ore (vanilla iron_ore’s chromatic mask mapped onto the family ramp) over example_deepslate’s own reference, palette and sampling mode — so the deep ore is the deep rock plus the same seam, which is what the vanilla pair iron_ore / deepslate_iron_ore is.",
     "shape_edit_mode": "appearance_only",
     "reference_part_map": null,
     "target_part_map": null
@@ -128,16 +128,21 @@
       "star_core": "#FFE3B0",
       "star_light": "#F0BE6E",
       "star_mid": "#CF9440",
-      "star_rim": "#8E5C1C"
+      "star_rim": "#8E5C1C",
+      "deep_1": "#242830",
+      "deep_2": "#30353F",
+      "deep_3": "#3E444F",
+      "deep_4": "#4F5763",
+      "deep_5": "#646D7C"
     },
     "parts": {
       "face": {
         "colors": [
-          "stone_1",
-          "stone_2",
-          "stone_3",
-          "stone_4",
-          "stone_5"
+          "deep_1",
+          "deep_2",
+          "deep_3",
+          "deep_4",
+          "deep_5"
         ],
         "material": "stone",
         "shade_axis": "none",
@@ -155,7 +160,9 @@
     "part_reference_sampling": {
       "face": "pattern"
     },
-    "part_reference_sources": {},
+    "part_reference_sources": {
+      "face": "deepslate"
+    },
     "part_reference_composite": {},
     "motif_policy": "model_authored",
     "accent_colors": [
@@ -167,8 +174,8 @@
     "accent_budget": 70,
     "accent_min_cluster": 1,
     "accent_cleanup": true,
-    "accent_edge_max": 100,
-    "threshold_waiver": "the deposits' shape and value order are vanilla iron_ore's, mapped onto the family's accent ramp, so the edge step is that ramp's own contrast (measured ~79) rather than a purpose-flattened deposit's. The family reference of 60 is calibrated for an accent mixed against flat stone. Declared so the relaxation is visible rather than silent.",
+    "accent_edge_max": 130,
+    "threshold_waiver": "the deposits are vanilla iron_ore mask and value order mapped onto the family ramp, over the deeper, darker rock of example_deepslate, so both the accent-to-base step (measured ~120) and the local step are larger than on the shallower stone. The family reference of 60/30 is calibrated against the lighter base. Declared so the relaxation is visible rather than silent.",
     "accent_from_reference": {
       "source": "iron_ore",
       "select": "chromatic",
@@ -184,23 +191,23 @@
       "rim": 0
     },
     "band_maximum_isolated": 0.1,
-    "band_maximum_step": 30,
+    "band_maximum_step": 40,
     "accent_motif_repeat_max": null,
     "accent_ramp_min_levels": null,
     "accent_ramp_min_monotone": null
   },
   "references": [
     {
-      "path": "../refs/stone.png",
-      "name": "stone",
+      "path": "../refs/deepslate.png",
+      "name": "deepslate",
       "roles": [
         "shape",
         "material",
         "pixel_style"
       ],
       "notes": [
-        "group=minecraft:block/stone",
-        "the base face: deliberately the SAME reference, palette and sampling mode as example_stone, so the two blocks share one stone by construction rather than by eye"
+        "group=minecraft:block/deepslate",
+        "the deep base: the same reference, palette and sampling mode as example_deepslate, so the two deep blocks share one rock by construction"
       ]
     },
     {

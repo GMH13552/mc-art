@@ -29,11 +29,19 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["ingot", "bar"],
+        "recognition_terms": [
+          "ingot",
+          "bar"
+        ],
         "contour_intent": "compact"
       }
     ],
-    "negative_identities": ["iron ingot", "gold ingot", "brick", "tool"],
+    "negative_identities": [
+      "iron ingot",
+      "gold ingot",
+      "brick",
+      "tool"
+    ],
     "orientation": "centered, same three-quarter view as vanilla iron_ingot",
     "reference_strategy": "appearance_only: keep iron_ingot's alpha contour exactly and take its shading as brightness only, so the metal keeps the reference's 3D rhythm while the hue becomes the family's. The sheen is a declared accent with a pixel budget and a minimum cluster size, so it cannot arrive as a lone dot.",
     "shape_edit_mode": "appearance_only",
@@ -51,7 +59,9 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["ingot"],
+        "recognition_terms": [
+          "ingot"
+        ],
         "contour_intent": "compact"
       }
     ],
@@ -61,7 +71,10 @@
         "part_id": "ingot",
         "primitive": "custom_mask",
         "params": {
-          "offset": [0, 0],
+          "offset": [
+            0,
+            0
+          ],
           "marker": "X",
           "rows": [
             "XXXXXXXXXXXXXXXX",
@@ -104,7 +117,13 @@
     },
     "parts": {
       "ingot": {
-        "colors": ["steel_1", "steel_2", "steel_3", "steel_4", "steel_5"],
+        "colors": [
+          "steel_1",
+          "steel_2",
+          "steel_3",
+          "steel_4",
+          "steel_5"
+        ],
         "material": "metal",
         "shade_axis": "top_left_to_bottom_right",
         "noise": 0.0,
@@ -126,16 +145,28 @@
     },
     "part_reference_composite": {},
     "motif_policy": "model_authored",
-    "accent_colors": ["#F0BE6E", "#CF9440", "#8E5C1C"],
-    "accent_budget": 40,
-    "accent_min_cluster": 3,
+    "accent_colors": [
+      "#C9B18E",
+      "#B29A78",
+      "#98835F",
+      "#6F6146"
+    ],
+    "accent_budget": 24,
+    "accent_min_cluster": 1,
     "accent_cleanup": false,
     "accent_edge_max": 90,
     "threshold_waiver": "the accent IS this item's own lighting, taken from iron_ingot's brightest pixels, so its edge step is iron_ingot's own contrast (measured 83) rather than an authored deposit's. The family's reference of 60 is calibrated for a deposit on stone; an item whose highlight is its own lit face legitimately exceeds it. Declared here so the relaxation is visible rather than silent.",
     "accent_from_reference": {
       "source": "iron_ingot",
-      "brightest_percent": 22,
-      "ramp": ["#F0BE6E", "#DFA855", "#CF9440", "#8E5C1C"]
+      "brightest_percent": 5,
+      "ramp": [
+        "#C9B18E",
+        "#B29A78",
+        "#98835F",
+        "#6F6146"
+      ],
+      "embed": 0.55,
+      "rim": 0.2
     },
     "band_maximum_isolated": 0.1,
     "band_maximum_step": 30,
@@ -170,7 +201,10 @@
     {
       "path": "../refs/iron_ingot.png",
       "name": "iron_ingot",
-      "roles": ["shape", "pixel_style"],
+      "roles": [
+        "shape",
+        "pixel_style"
+      ],
       "notes": [
         "group=minecraft:item/iron_ingot",
         "shape authority for this request: appearance_only copies its contour and takes brightness only, so the silhouette cannot drift while the metal becomes ours"

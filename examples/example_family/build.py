@@ -55,7 +55,14 @@ REFERENCE_GROUPS = {
 
 # Reference row for the sheet, then the generated family, in family order.
 REFERENCE_ROW = ("stone", "deepslate", "iron_ore", "iron_ingot", "raw_iron")
-FAMILY = ("example_stone", "example_deepslate", "example_ore", "example_raw_ore", "example_ingot")
+FAMILY = (
+    "example_stone",
+    "example_deepslate",
+    "example_ore",
+    "example_deepslate_ore",
+    "example_raw_ore",
+    "example_ingot",
+)
 
 # Which vanilla texture each member takes its *shape* from. Printing and
 # asserting this is what keeps "does it reference something?" from becoming a
@@ -64,6 +71,7 @@ SHAPE_AUTHORITY = {
     "example_stone": "stone",
     "example_deepslate": "deepslate",
     "example_ore": "stone",
+    "example_deepslate_ore": "deepslate",
     "example_raw_ore": "raw_iron",
     "example_ingot": "iron_ingot",
 }

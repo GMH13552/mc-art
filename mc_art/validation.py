@@ -426,7 +426,10 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         ramp_max_dominant_share=getattr(appearance, "accent_ramp_max_dominant_share", 0.6),
         ramp_min_monotone=getattr(appearance, "accent_ramp_min_monotone", 0.6),
         bar_fill_max=getattr(appearance, "accent_bar_fill_max", 0.75),
-        bar_min_aspect=getattr(appearance, "accent_bar_min_aspect", 2.0),
+        bar_min_aspect=getattr(appearance, "accent_bar_min_aspect", 1.8),
+        bar_min_pixels=getattr(appearance, "accent_bar_min_pixels", 10),
+        accent_base_gap_max=getattr(appearance, "accent_base_gap_max", 20.0),
+        accent_base_edge_mean_max=getattr(appearance, "accent_base_edge_mean_max", 35.0),
     )
     bands = band_report(
         rendered,
@@ -465,6 +468,11 @@ def validate_style(appearance: object, rendered: Image.Image) -> ValidationResul
         "accent_ramp_ok": bool(audit["structure"]["ramp"]["ok"]),
         "accent_bar_clusters": int(audit["structure"]["shape"]["bar_clusters"]),
         "accent_bar_ok": bool(audit["structure"]["shape"]["ok"]),
+        "accent_base_gap_mean": audit["accent_base_gap_mean"],
+        "accent_edge_delta_mean": audit["edge_delta_mean"],
+        "accent_base_gap_ok": bool(audit["base_gap_ok"]),
+        "accent_luma_mean": audit["accent_luma_mean"],
+        "base_luma_mean": audit["base_luma_mean"],
         "accent_structure_ok": bool(audit["structure"]["ok"]),
         "band_count": int(bands["band_count"]),
         "band_isolated_pixels": int(bands["isolated_pixels"]),

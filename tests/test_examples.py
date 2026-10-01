@@ -69,6 +69,7 @@ def test_the_family_ships_one_plan_per_member() -> None:
         "example_stone.plan.json",
         "example_deepslate.plan.json",
         "example_ore.plan.json",
+        "example_deepslate_ore.plan.json",
         "example_raw_ore.plan.json",
         "example_ingot.plan.json",
     }
@@ -92,9 +93,10 @@ def test_the_plain_blocks_declare_an_accent_budget_of_zero_and_a_95_percent_valu
 
 def test_the_accented_members_declare_their_whole_accent_contract() -> None:
     expected = {
-        "example_ore": (62, 3),
+        "example_ore": (70, 2),
+        "example_deepslate_ore": (70, 2),
         "example_raw_ore": (27, 3),
-        "example_ingot": (40, 3),
+        "example_ingot": (32, 3),
     }
     for name, (budget, minimum) in expected.items():
         data = json.loads((FAMILY / (name + ".plan.json")).read_text(encoding="utf-8"))

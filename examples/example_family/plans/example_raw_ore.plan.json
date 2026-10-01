@@ -29,11 +29,20 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["lump", "chunk", "raw ore"],
+        "recognition_terms": [
+          "lump",
+          "chunk",
+          "raw ore"
+        ],
         "contour_intent": "compact"
       }
     ],
-    "negative_identities": ["ingot", "bar", "gem", "tool"],
+    "negative_identities": [
+      "ingot",
+      "bar",
+      "gem",
+      "tool"
+    ],
     "orientation": "centered, same three-quarter massing as vanilla raw_iron",
     "reference_strategy": "appearance_only against vanilla raw_iron: this object already exists in the game, so its shape is the authority and only the material is ours. Sampling takes the source's brightness (value), so raw_iron's own lit face and shadowed underside survive the recolour; the two deposits are declared accents with a budget, a minimum cluster size and a required value ramp.",
     "shape_edit_mode": "appearance_only",
@@ -51,7 +60,9 @@
         "paint_only": false,
         "layer": 0,
         "style_role": "silhouette support",
-        "recognition_terms": ["lump"],
+        "recognition_terms": [
+          "lump"
+        ],
         "contour_intent": "compact"
       }
     ],
@@ -61,7 +72,10 @@
         "part_id": "lump",
         "primitive": "custom_mask",
         "params": {
-          "offset": [0, 0],
+          "offset": [
+            0,
+            0
+          ],
           "marker": "X",
           "rows": [
             "XXXXXXXXXXXXXXXX",
@@ -104,7 +118,13 @@
     },
     "parts": {
       "lump": {
-        "colors": ["rock_1", "rock_2", "rock_3", "rock_4", "rock_5"],
+        "colors": [
+          "rock_1",
+          "rock_2",
+          "rock_3",
+          "rock_4",
+          "rock_5"
+        ],
         "material": "stone",
         "shade_axis": "top_left_to_bottom_right",
         "noise": 0.0,
@@ -126,7 +146,12 @@
     },
     "part_reference_composite": {},
     "motif_policy": "model_authored",
-    "accent_colors": ["#FFE3B0", "#F0BE6E", "#CF9440", "#8E5C1C"],
+    "accent_colors": [
+      "#FFE3B0",
+      "#F0BE6E",
+      "#CF9440",
+      "#8E5C1C"
+    ],
     "accent_budget": 27,
     "accent_min_cluster": 3,
     "accent_cleanup": true,
@@ -165,7 +190,11 @@
     {
       "path": "../refs/raw_iron.png",
       "name": "raw_iron",
-      "roles": ["shape", "material", "pixel_style"],
+      "roles": [
+        "shape",
+        "material",
+        "pixel_style"
+      ],
       "notes": [
         "group=minecraft:item/raw_iron",
         "shape authority for this request: raw ore already exists in the game, so its contour and its lit/shadowed massing are the authority and only the material is ours",

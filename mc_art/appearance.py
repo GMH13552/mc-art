@@ -1821,6 +1821,7 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
     # greyscale source is exactly the case the overlay path cannot serve: it has
     # no chroma, so nothing is "salient", and a hand-drawn bar was the result.
     accent_from_reference = appearance.accent_from_reference
+    reference_accent_points: set[tuple[int, int]] = set()
     if accent_from_reference is not None:
         source_name = str(accent_from_reference.get("source", "")).strip()
         ramp_tokens = [str(item) for item in (accent_from_reference.get("ramp") or [])]
@@ -1833,6 +1834,20 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
             except (TypeError, ValueError):
                 percent = 22.0
             percent = min(max(percent, 1.0), 100.0)
+            # ``select`` decides WHICH of the reference's pixels become the
+            # accent; the ramp decides what colour they take. "brightest" is a lit
+            # face, "chromatic" is a deposit whose own pixels are saturated
+            # against a grey base. Either way the *shape and the value order* come
+            # from the reference and the *palette* comes from the family -- which
+            # is the difference between referencing a source and copying it.
+            # Copying vanilla iron_ore's pixels verbatim dragged its muted
+            # earth-brown into a family whose accent is amber.
+            select = str(accent_from_reference.get("select", "brightest")).strip().lower()
+            try:
+                chroma_min = float(accent_from_reference.get("chroma_min", 40.0))
+            except (TypeError, ValueError):
+                chroma_min = 40.0
+            source_pixels = source_image.convert("RGBA")
             candidates = [
                 (x, y)
                 for y in range(compiled.height)
@@ -1840,7 +1855,11 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                 if compiled.mask.getpixel((x, y)) > 0
                 and source_image.getpixel((x, y))[3] >= 8
             ]
-            source_pixels = source_image.convert("RGBA")
+            if select == "chromatic":
+                candidates = [
+                    point for point in candidates
+                    if _chroma(source_pixels.getpixel(point)[:3]) >= chroma_min
+                ]
             ranked = sorted(
                 candidates,
                 key=lambda point: _luma(source_pixels.getpixel(point)[:3]),
@@ -1849,6 +1868,26 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
             take = max(1, int(round(len(ranked) * percent / 100.0)))
             chosen = ranked[:take]
             ramp = [_palette_color(appearance.palette, token) for token in ramp_tokens]
+            # EMBED, do not paste. A deposit that only overwrites the base leaves a
+            # hard seam: measured on vanilla's own art the speck-to-stone
+            # difference is 12.2 luma, and on a build that pasted vanilla's pixels
+            # onto our darker stone it was 42.7 -- the same flecks, and they no
+            # longer looked embedded because the *relationship* to the base was
+            # gone. So: pull each accent pixel toward the base colour it covers,
+            # and push the base pixels bordering the accent slightly toward it.
+            # Position and value order are untouched; only the transition changes.
+            try:
+                embed = float(accent_from_reference.get("embed", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                embed = 0.0
+            try:
+                rim = float(accent_from_reference.get("rim", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                rim = 0.0
+            embed = min(max(embed, 0.0), 1.0)
+            rim = min(max(rim, 0.0), 1.0)
+            under: dict[tuple[int, int], tuple[int, int, int]] = {}
+            painted: dict[tuple[int, int], tuple[int, int, int]] = {}
             # Brightest gets ramp[0], dimmest of the chosen gets the last stop.
             for index, point in enumerate(chosen):
                 if len(ramp) == 1:
@@ -1857,15 +1896,59 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
                     position = index / float(len(chosen) - 1) if len(chosen) > 1 else 0.0
                     stop = ramp[min(len(ramp) - 1, int(round(position * (len(ramp) - 1))))]
                 x, y = point
-                pixels[x, y] = (*stop, 255)
+                under[point] = pixels[x, y][:3]
+                painted[point] = stop
+            for point, stop in painted.items():
+                base_here = under[point]
+                blended = tuple(
+                    int(round(stop[channel] * (1.0 - embed) + base_here[channel] * embed))
+                    for channel in range(3)
+                )
+                pixels[point[0], point[1]] = (*blended, 255)
+            reference_accent_points = set(chosen)
+            if rim > 0.0:
+                ring: set[tuple[int, int]] = set()
+                for x, y in chosen:
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        neighbour = (x + dx, y + dy)
+                        if neighbour in painted or neighbour in under:
+                            continue
+                        if compiled.mask.getpixel(neighbour) == 0:
+                            continue
+                        ring.add(neighbour)
+                # The nearest accent pixel's painted colour, so a multi-stop ramp
+                # bleeds its own local value rather than one flat tone.
+                for neighbour in ring:
+                    nx, ny = neighbour
+                    nearest = min(
+                        painted,
+                        key=lambda point: abs(point[0] - nx) + abs(point[1] - ny),
+                    )
+                    tint = painted[nearest]
+                    here = pixels[nx, ny][:3]
+                    pixels[nx, ny] = (
+                        *(
+                            int(round(here[channel] * (1.0 - rim) + tint[channel] * rim))
+                            for channel in range(3)
+                        ),
+                        255,
+                    )
 
     # A declared minimum accent deposit is enforced on the finished raster, so
-    # one rule covers every way an accent can arrive -- pixel_map, region rule,
-    # reference overlay or mark. "one or two jarring dots" is exactly a cluster
-    # below the authored minimum; the survivor keeps its colour and the speck
-    # takes the nearest base pixel's, so the material's own grain is not
-    # flattened. This is the repair the author opted into; the gate in
-    # validate_style runs on whatever this leaves behind either way.
+    # one rule covers every way an accent can arrive -- pixel_map, region rule or
+    # mark. "one or two jarring dots" is exactly a cluster below the authored
+    # minimum; the survivor keeps its colour and the speck takes the nearest base
+    # pixel's, so the material's own grain is not flattened. This is the repair
+    # the author opted into; the gate in validate_style runs on whatever this
+    # leaves behind either way.
+    #
+    # Pixels that came from a REFERENCE are exempt. A deposit's own pixels are
+    # not strays: clearing four of them because they fell below an authored
+    # cluster size chewed the edge off two of vanilla iron_ore's specks, which is
+    # visible and wrong. The repair exists for marks a model drew by hand, so a
+    # reference's pixels keep their place and the count that was spared is
+    # reported instead of applied.
+    reference_pixels_kept = 0
     if appearance.accent_cleanup and appearance.accent_min_cluster > 1:
         accent, _mode = accent_points(
             result,
@@ -1874,10 +1957,16 @@ def render_appearance(geometry: GeometrySpec, compiled: CompiledGeometry,
             palette=appearance.palette,
         )
         if accent:
-            result, _kept, removed = despeckle_accent(
-                result, accent, appearance.accent_min_cluster
-            )
-            pixels = result.load()
+            if accent_from_reference is not None:
+                exempt = reference_accent_points
+                protected = accent & exempt
+                reference_pixels_kept = len(protected)
+                accent = accent - exempt
+            if accent:
+                result, _kept, removed = despeckle_accent(
+                    result, accent, appearance.accent_min_cluster
+                )
+                pixels = result.load()
 
     output_alpha = (alpha_mask or compiled.mask).convert("L")
     if output_alpha.size != result.size:

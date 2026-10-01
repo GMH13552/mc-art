@@ -800,6 +800,9 @@ def accent_audit(
     bar_fill_max: float | None = 0.75,
     bar_min_aspect: float | None = 1.8,
     bar_min_pixels: int | None = 10,
+    accent_base_gap_max: float | None = 20.0,
+    accent_base_edge_mean_max: float | None = 35.0,
+    threshold_waiver: str = "",
 ) -> dict[str, Any]:
     """Count the accent pixels a sprite spent, and check every declared budget.
 
@@ -827,6 +830,7 @@ def accent_audit(
         palette=palette,
         accent_tolerance=accent_tolerance,
     )
+    base_points = set(pixels) - points
     structure, structure_reasons = accent_structure_report(
         points,
         pixels,
@@ -868,6 +872,17 @@ def accent_audit(
         edge_chromas.append(abs(chroma(pixel) - chroma(pixels[nearest])))
     edges.sort()
     percentile_90 = edges[min(len(edges) - 1, int(len(edges) * 0.9))] if edges else 0.0
+    # How far the accents sit from the material they are set into. Vanilla's own
+    # iron_ore measures 12.2 here against 23.3 edge-mean and 43.4 edge-p90 -- its
+    # flecks are nearly dissolved in their stone. A build that pasted those same
+    # flecks onto a darker stone measured 42.7 against 55.7/92.3, and the flecks
+    # read as stuck on even though every pixel of them was vanilla's: the
+    # relationship to the base is what "embedded" means, not the fleck.
+    base_lumas = [luma(pixels[point]) for point in base_points]
+    base_luma_mean = sum(base_lumas) / len(base_lumas) if base_lumas else 0.0
+    accent_luma_mean = (
+        sum(luma(pixels[point]) for point in points) / len(points) if points else 0.0
+    )
     report: dict[str, Any] = {
         "sprite": str(image) if not isinstance(image, Image.Image) else None,
         "opaque_pixels": len(pixels),
@@ -885,6 +900,9 @@ def accent_audit(
         "minimum_cluster": minimum_cluster,
         "edge_delta_mean": round(sum(edges) / float(len(edges)), 2) if edges else None,
         "edge_delta_p90": round(percentile_90, 2) if edges else None,
+        "accent_base_gap_mean": round(abs(accent_luma_mean - base_luma_mean), 2) if points else None,
+        "accent_luma_mean": round(accent_luma_mean, 2) if points else None,
+        "base_luma_mean": round(base_luma_mean, 2),
         "edge_chroma_mean": (
             round(sum(edge_chromas) / len(edge_chromas), 2) if edge_chromas else None
         ),
@@ -904,18 +922,49 @@ def accent_audit(
             accent_weights.append(chroma(colour))
     accent_hue = _circular_mean(accent_turns, accent_weights)
     report["accent_hue_degrees"] = None if accent_hue is None else round(accent_hue * 360.0, 1)
+    accent_saturations = [
+        hsv(pixels[point])[1] for point in points
+    ]
+    report["accent_saturation_mean"] = (
+        round(sum(accent_saturations) / len(accent_saturations), 4)
+        if accent_saturations else None
+    )
     report["accent_luma_mean"] = (
         round(sum(accent_lumas) / len(accent_lumas), 2) if accent_lumas else None
     )
     report["within_budget"] = budget is None or len(points) <= budget
     report["clusters_ok"] = sum(undersized) == 0
     report["edge_ok"] = edge_max is None or (report["edge_delta_p90"] or 0.0) <= edge_max
+    # Embedded, or pasted on? Vanilla iron_ore: gap 12.2, edge mean 23.3, p90 43.4.
+    gap = report["accent_base_gap_mean"] or 0.0
+    edge_mean = report["edge_delta_mean"] or 0.0
+    gap_ok = (
+        accent_base_gap_max is None
+        or (gap <= accent_base_gap_max and edge_mean <= accent_base_edge_mean_max)
+    )
+    report["base_gap"] = {
+        "accent_base_gap_mean": report["accent_base_gap_mean"],
+        "edge_delta_mean": report["edge_delta_mean"],
+        "edge_delta_p90": report["edge_delta_p90"],
+        "maximum_gap": accent_base_gap_max,
+        "maximum_edge_mean": accent_base_edge_mean_max,
+        "ok": gap_ok,
+    }
+    report["base_gap_ok"] = gap_ok
+    if not gap_ok and threshold_waiver:
+        # Allowed with a stated reason, exactly as a widened limit is: the number
+        # is still reported, it just does not refuse the asset.
+        gap_ok = True
+        report["base_gap"]["ok"] = True
+        report["base_gap"]["waived"] = threshold_waiver
+    report["base_gap_ok"] = gap_ok
     report["budget"] = budget
     report["structure"] = structure
     report["consistent"] = bool(
         report["within_budget"]
         and report["clusters_ok"]
         and report["edge_ok"]
+        and gap_ok
         and structure["ok"]
     )
     reasons: list[str] = []
@@ -932,6 +981,14 @@ def accent_audit(
         reasons.append(
             "accent-to-base step p90 %.0f exceeds the declared maximum of %.0f"
             % (report["edge_delta_p90"] or 0.0, edge_max or 0.0)
+        )
+    if accent_base_gap_max is not None and not gap_ok:
+        reasons.append(
+            "accent is not embedded: accents sit %.1f luma from the material they are set "
+            "into (limit %.1f) and the accent boundary steps by %.1f (limit %.1f). Vanilla's "
+            "own iron_ore measures 12.2 / 23.3 -- its flecks nearly dissolve in their stone. "
+            "Add an embed/rim transition between the accent and the base"
+            % (gap, accent_base_gap_max, edge_mean, accent_base_edge_mean_max or 0.0)
         )
     reasons.extend(structure_reasons)
     report["reasons"] = reasons
@@ -1015,6 +1072,13 @@ def sprite_axes(
         # thing" failure.
         "accent_hue_turns": None if accent_hue is None else round(accent_hue, 5),
         "accent_hue_degrees": None if accent_hue is None else round(accent_hue * 360.0, 1),
+        # ...and its saturation, because two accents can share a hue and still be
+        # two palettes: measured on a real family, 28-35 deg identical while
+        # saturation ran 0.33 on the ore against 0.68 on the ingot.
+        "accent_saturation_mean": (
+            round(sum(hsv(pixels[point])[1] for point in accent) / len(accent), 4)
+            if accent else None
+        ),
         "chroma_mean": round(sum(chromas) / len(chromas), 2),
         "luma_mean": round(mean_luma, 2),
         "luma_std": round(variance ** 0.5, 2),
@@ -1031,6 +1095,7 @@ def family_axes(
     maximum_luma_span: float = 56.0,
     maximum_chroma_span: float = 46.0,
     maximum_accent_hue_span_deg: float = 14.0,
+    maximum_accent_saturation_span: float = 0.30,
     minimum_accent_pixels: int = 4,
 ) -> dict[str, Any]:
     """Measure whether a set of sprites shares one material axis and one accent.
@@ -1068,7 +1133,30 @@ def family_axes(
     accent_hue_span_deg = (
         round(circular_span(accent_hues) * 360.0, 1) if len(accent_hues) >= 2 else None
     )
+    # The second accent axis, and the one that stayed green while the family was
+    # visibly two palettes: hue was aligned (28-35 deg) while saturation was not
+    # (0.33 on the ore against 0.68 on the ingot). Hue alone cannot see "one is
+    # muted earth and the other is bright amber".
+    accent_sats = [
+        (row["sprite"] or "?", row["accent_saturation_mean"])
+        for row in rows
+        if row["accent_pixels"] >= minimum_accent_pixels
+        and row.get("accent_saturation_mean") is not None
+    ]
+    accent_sat_span = (
+        round(max(value for _name, value in accent_sats) - min(value for _name, value in accent_sats), 4)
+        if len(accent_sats) >= 2 else None
+    )
     reasons: list[str] = []
+    if accent_sat_span is not None and accent_sat_span > maximum_accent_saturation_span:
+        listed = ", ".join(
+            "%s %.2f" % (Path(str(name)).parent.name or name, value)
+            for name, value in sorted(accent_sats, key=lambda item: item[1])
+        )
+        reasons.append(
+            "accent saturation span %.3f exceeds %.3f: the members are not one accent palette. "
+            "Per member: %s" % (accent_sat_span, maximum_accent_saturation_span, listed)
+        )
     if hue_span_deg is not None and hue_span_deg > maximum_hue_span_deg:
         reasons.append(
             "hue span %.1f deg exceeds %.1f deg: the members are not one material"
@@ -1096,6 +1184,11 @@ def family_axes(
         "luma_span": luma_span,
         "chroma_span": chroma_span,
         "accent_hue_span_degrees": accent_hue_span_deg,
+        "accent_saturation_span": accent_sat_span,
+        "accent_saturations": [
+            {"sprite": name, "saturation": value} for name, value in accent_sats
+        ],
+        "maximum_accent_saturation_span": maximum_accent_saturation_span,
         "accent_members": len(accent_hues),
         "limits": {
             "maximum_hue_span_deg": maximum_hue_span_deg,
