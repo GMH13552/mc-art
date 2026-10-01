@@ -526,6 +526,8 @@ def test_the_bar_gate_fires_on_a_pasted_band_and_passes_a_form_following_highlig
 
     # The delivered sheen: vanilla iron_ingot's own brightest 22%, which steps
     # down along the ingot's lit face rather than across it.
+    if not (REFS / "iron_ingot.png").exists():
+        pytest.skip("vanilla reference not extracted")
     source = Image.open(REFS / "iron_ingot.png").convert("RGBA")
     ranked = sorted(
         (
