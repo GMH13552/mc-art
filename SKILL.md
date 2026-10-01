@@ -60,16 +60,38 @@ engine execute it.
 
 ## The loop
 
+**Run every command from the skill's own root directory.** The engine imports
+`mc_art` from there, so the working directory is part of the invocation.
+
+Pick the entry point for your platform — all three find Python the same way, and
+all three are the same engine:
+
+| platform | entry point |
+|---|---|
+| any (recommended) | `M="<interpreter> -m mc_art"` |
+| POSIX / WSL / Git Bash | `M=bin/mc-art` |
+| Windows cmd | `M=bin\mc-art.cmd` |
+| Windows PowerShell | `M=bin\mc-art.ps1` |
+
+The first form is the portable one and is what the examples below use: find the
+interpreter that actually runs, then ask it for the module. On Windows that is
+usually `python`; **`python3` is often a 0-byte Microsoft Store stub that exists,
+is found on PATH, and exits 9009 without running anything**, which is why nothing
+here names it.
+
 ```bash
-M=bin/mc-art
+M="python -m mc_art"          # Windows + DSH's bundled Python, and most POSIX too
+# M="bin/mc-art"              # POSIX if you prefer the wrapper
+# M="bin\mc-art.cmd"          # Windows cmd
 JAR="<path to a vanilla jar, a mod jar, or a directory with assets/>"
+OUT="<a scratch output directory you can write to>"
 
 # 1. SCAN — what logical names exist (one name = all of its textures)
 $M list-groups --source "$JAR" --filter bow --limit 5
 
 # 2. LOOK — pull the real PNGs and read them with the image reader.
 #    Never design from a text summary alone.
-$M list-groups --source "$JAR" --extract minecraft:item/bow --to /tmp/refs
+$M list-groups --source "$JAR" --extract minecraft:item/bow --to "$OUT/refs"
 
 # 3. EVIDENCE — when you need pixel precision: the literal per-pixel text,
 #    and which frame of a family answers this request
@@ -105,7 +127,7 @@ $M render --plan my.plan.json --out outputs/mine
 #
 # 8. BEFORE HANDING OVER: READ work/view.png. An atlas can land on exactly the
 #    right rectangles and the mob still be wrong.
-#      $M ingame --selftest --out /tmp/look      # asserts the renderer itself
+#      $M ingame --selftest --out "$OUT/look"      # asserts the renderer itself
 ```
 
 Step 4 takes about a second and needs no credentials. Iterate as long as the
@@ -311,12 +333,13 @@ both directions; the sprite is the evidence.
 
 ```bash
 S=scripts
-python3 "$S/magnify.py" '{"out":"/tmp/check.png","cols":4,"entries":[
-  ["SRC","/tmp/refs/bow_standby.png"], ["MINE","outputs/mine/sprite.png"]]}'
-$M measure mine_a.png mine_b.png mine_c.png --baseline /tmp/refs/bow_standby.png
+# "$PY" is the interpreter that actually runs; the wrapper scripts set it for you.
+$PY "$S/magnify.py" '{"out":"'"$OUT"'/check.png","cols":4,"entries":[
+  ["SRC","'"$OUT"'/refs/bow_standby.png"], ["MINE","outputs/mine/sprite.png"]]}'
+$M measure mine_a.png mine_b.png mine_c.png --baseline "$OUT/refs/bow_standby.png"
 ```
 
-Read `/tmp/check.png` back with the image reader — never describe it from the
+Read `"$OUT/check.png"` back with the image reader — never describe it from the
 JSON, a previous run, or memory. Then answer:
 
 - **Contour** — does it match the source frame you conformed to (`IoU 1.0000`,
@@ -346,7 +369,7 @@ green gate is the *start* of this step, never a substitute for it.
    sheet on screen. `scripts/magnify.py` takes both as entries:
 
    ```bash
-   python3 scripts/magnify.py '{"out":"/tmp/last_look.png","cols":2,"entries":[
+   $PY scripts/magnify.py '{"out":"'"$OUT"'/last_look.png","cols":2,"entries":[
      ["VANILLA","refs/iron_ore.png"], ["MINE","outputs/ore/sprite.png"]]}'
    ```
 
@@ -410,11 +433,11 @@ sees, a body that reads as a slab. Nothing above catches any of that, because
 everything above is flat. So the last look is a render of the model itself.
 
 ```bash
-$M ingame --selftest --out /tmp/look              # assert the renderer, then look
-$M ingame --control cow --control both --source game.jar --out /tmp/look
+$M ingame --selftest --out "$OUT/look"            # assert the renderer, then look
+$M ingame --control cow --control both --source game.jar --out "$OUT/look"
 $M model --jar game.jar --texture textures/entity/sheep/sheep.png --emit-spec mine.json
-$M ingame --model mine.json --source game.jar --view front34 --out /tmp/look/mine.png
-$M ingame --block anvil_undamaged --source game.jar --out /tmp/look/anvil.png
+$M ingame --model mine.json --source game.jar --view front34 --out "$OUT/look/mine.png"
+$M ingame --block anvil_undamaged --source game.jar --out "$OUT/look/anvil.png"
 ```
 
 Then read the PNG back with the image reader. A render nobody looked at is not a

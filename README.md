@@ -20,11 +20,18 @@ ln -s "$PWD" ~/.dsh/skills/mc-art
 ## Use
 
 ```bash
-M=bin/mc-art
+# Run from the repository root. Pick the entry point for your platform; all
+# three find a working Python the same way (they RUN it, they do not trust PATH):
+#   any platform      python -m mc_art
+#   POSIX / WSL       bin/mc-art
+#   Windows cmd       bin\mc-art.cmd
+#   Windows PowerShell bin\mc-art.ps1
+M="python -m mc_art"
 JAR=<vanilla jar | mod jar | directory containing assets/>
+OUT=<a scratch output directory you can write to>
 
 $M list-groups --source "$JAR" --filter bow          # what logical names exist
-$M list-groups --source "$JAR" --extract minecraft:item/bow --to /tmp/refs
+$M list-groups --source "$JAR" --extract minecraft:item/bow --to "$OUT/refs"
 $M evidence    --source "$JAR" --name bow --member bow_standby
 $M render      --plan my.plan.json --out outputs/mine
 $M why-reference --plan my.plan.json                 # which reference, and which step picked it

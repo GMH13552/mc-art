@@ -8,7 +8,46 @@
 #
 # Every command takes --source explicitly; nothing here assumes a Minecraft
 # install path.
+#
+# This is the POSIX entry point. On Windows use bin\mc-art.cmd (cmd, PowerShell)
+# or bin\mc-art.ps1 (PowerShell). All three find Python the same way.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$HERE"
-exec python3 -m mc_art "$@"
+
+# A candidate Python counts only if it actually RUNS and prints exactly "1".
+# "the command exists" is not evidence: on Windows `python3` is frequently a
+# 0-byte Microsoft Store stub that exists, is found by `command -v`, and exits
+# 9009 without running anything.
+python_works() {
+  local out
+  out="$("$@" -c 'print(1)' 2>/dev/null)" || return 1
+  [ "$(printf '%s' "$out" | tr -d '[:space:]')" = "1" ]
+}
+
+find_python() {
+  if [ -n "${MC_ART_PYTHON:-}" ]; then
+    if python_works "$MC_ART_PYTHON"; then printf '%s' "$MC_ART_PYTHON"; return 0; fi
+    echo "mc-art: MC_ART_PYTHON=$MC_ART_PYTHON does not run (needs to print 1)" >&2
+  fi
+  local name
+  for name in python python3; do
+    if command -v "$name" >/dev/null 2>&1 && python_works "$name"; then
+      printf '%s' "$name"; return 0
+    fi
+  done
+  if command -v py >/dev/null 2>&1; then
+    if python_works py -3; then printf 'py -3'; return 0; fi
+    if python_works py; then printf 'py'; return 0; fi
+  fi
+  return 1
+}
+
+PY="$(find_python)" || {
+  echo "mc-art: no working Python found. Tried \$MC_ART_PYTHON, python, python3, py -3, py." >&2
+  echo "mc-art: each candidate must run \`-c 'print(1)'\` and print 1. Set MC_ART_PYTHON to a real interpreter." >&2
+  exit 127
+}
+
+# shellcheck disable=SC2086
+exec $PY -m mc_art "$@"
