@@ -266,21 +266,61 @@ def write_block_model(
         directory.mkdir(parents=True, exist_ok=True)
 
     written_textures: dict[str, str] = {}
-    for texture_name, relative in (spec.get("textures") or {}).items():
-        candidate = Path(str(relative))
+    texture_copies: list[dict[str, Any]] = []
+    for texture_name, value in (spec.get("textures") or {}).items():
+        key = str(texture_name)
+        declared_id = ""
+        if isinstance(value, dict):
+            source = str(value.get("path") or value.get("source") or "")
+            declared_id = str(value.get("id") or "").strip()
+        else:
+            source = str(value)
+        if declared_id:
+            # The spec named the REAL resource id, so the pack ships nothing new and
+            # claims nothing new: one texture, one name, one truth.
+            written_textures[key] = declared_id
+            continue
+        candidate = Path(source)
         if not candidate.is_absolute():
             candidate = source_dir / candidate
         if not candidate.exists():
             raise ValueError("texture %r points at a missing file: %s" % (texture_name, candidate))
-        target = textures_dir / (str(texture_name) + ".png")
+        target = textures_dir / (key + ".png")
         target.write_bytes(candidate.read_bytes())
-        written_textures[str(texture_name)] = str(target)
+        written_textures[key] = "%s:block/%s" % (namespace, key)
+        if candidate.stem != key:
+            # Copying is the default, and when the key differs from the source
+            # asset's own name the pack now holds the same bytes under two names --
+            # a second truth somebody has to keep in sync. Allowed, but reported
+            # rather than produced quietly.
+            texture_copies.append({
+                "key": key,
+                "source": str(candidate),
+                "shipped_as": written_textures[key],
+                "note": "the spec key %r differs from the source name %r, so the pack ships these "
+                        "bytes RENAMED: anything else that refers to the source id will not find "
+                        "them, and the same bytes now exist under two names. That is allowed, but "
+                        "if the real asset id matters -- the texture already lives in the pack, or "
+                        "another model uses it -- give the entry an explicit \"id\" instead, and "
+                        "nothing is copied" % (key, candidate.name),
+            })
 
+    # A face's `texture` in a SPEC is a key into `textures`. In a Minecraft MODEL
+    # it is a VARIABLE, and a variable must be written `#key`. Emitting the bare
+    # key made every face resolve to the path `<ns>:textures/stone.png`, which does
+    # not exist, so every face lost its texture and the model was unusable in game
+    # -- while the engine's own audit, which checks the SPEC's convention, stayed
+    # green and the preview, which reads the PNGs off disk, looked perfect.
+    #
+    # Checked against the first 401 vanilla block models: 2962 `#variable` values,
+    # 10 namespaced paths, and 32 bare words -- every one of those 32 a path
+    # (`block/powder_snow`). No vanilla model uses a bare word as a variable.
+    elements = _face_textures_as_variables(spec.get("elements") or [], written_textures)
     model_document: dict[str, Any] = {
-        "textures": {
-            str(key): "%s:block/%s" % (namespace, key) for key in written_textures
-        },
-        "elements": spec.get("elements") or [],
+        # `written_textures` already holds resource ids: a declared id is used
+        # verbatim, a copied texture becomes `<ns>:block/<key>`.
+        "textures": dict(written_textures),
+        "elements": elements,
     }
     if spec.get("parent"):
         model_document["parent"] = str(spec["parent"])
@@ -290,6 +330,22 @@ def write_block_model(
     model_path.write_text(
         json.dumps(model_document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    # Read the FILE back and check it is a legal Minecraft model. Checking the spec
+    # is what let a model with 42 bare-word faces ship: the spec was fine by the
+    # spec's own convention, the audit was green, the preview read the PNGs off
+    # disk and looked perfect, and every face in the written model was dead.
+    if texture_copies:
+        audit["texture_copies"] = texture_copies
+    written = validate_written_model(model_path, audit)
+    if not written["ok"]:
+        detail = "; ".join(
+            "element %d face %s: %s" % (item["element"], item["face"], item["why"])
+            for item in written["problems"][:5]
+        )
+        raise ValueError(
+            "the written model is not a legal Minecraft model -- %d face(s) would show no "
+            "texture. %s" % (len(written["problems"]), detail)
+        )
     blockstate_path = assets / "blockstates" / (name + ".json")
     blockstate_path.write_text(
         json.dumps(
@@ -341,8 +397,134 @@ def write_block_model(
         "audit": str(audit_path),
         "uv_map": str(root / "UV_MAP.txt"),
         "textures": written_textures,
+        "texture_copies": texture_copies,
         "report": audit,
     }
+
+
+def _face_textures_as_variables(
+    elements: list[dict[str, Any]], texture_keys: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Turn spec face-texture keys into Minecraft model variables.
+
+    `"texture": "stone"` in a spec means "the `stone` entry of this model's
+    `textures` map", and in a model that is written `"texture": "#stone"`. A value
+    without `#` is read as a PATH, so a bare key silently resolves to
+    `<ns>:textures/<key>.png` and the face shows nothing.
+
+    Already-correct values are left alone: `#key` stays, and so does a namespaced
+    path (`ns:block/thing`), because vanilla models do use those for faces that
+    point straight at a texture file.
+    """
+    copied: list[dict[str, Any]] = []
+    for element in elements:
+        item = dict(element)
+        faces = element.get("faces")
+        if isinstance(faces, dict):
+            new_faces: dict[str, Any] = {}
+            for face_name, face in faces.items():
+                if not isinstance(face, dict) or "texture" not in face:
+                    new_faces[face_name] = face
+                    continue
+                value = str(face["texture"])
+                face = dict(face)
+                if value.startswith("#") or ":" in value or "/" in value:
+                    face["texture"] = value
+                elif value in texture_keys:
+                    face["texture"] = "#" + value
+                else:
+                    # Not declared in this model's map: leave it visible for the
+                    # validator to refuse rather than inventing a variable.
+                    face["texture"] = value
+                new_faces[face_name] = face
+            item["faces"] = new_faces
+        copied.append(item)
+    return copied
+
+
+def validate_written_model(
+    model_path: str | Path, audit: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Read the model BACK and check it is a legal Minecraft model.
+
+    Checking the spec is not enough -- that is how a model with 42 bare-word faces
+    shipped, with the audit green and the preview correct. The question "does the
+    game load this" is about the FILE, so the file is what gets read.
+
+    Every face's `texture` must be either:
+
+    * `#name`, where `name` is present in the model's own `textures` map; or
+    * a namespaced path to a texture that actually exists in the pack, or a
+      vanilla-looking `ns:block/...` path (which the engine cannot verify against
+      a jar it was not given).
+
+    Anything else is an ERROR, naming the element and face.
+    """
+    path = Path(model_path)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    textures = document.get("textures") or {}
+    elements = document.get("elements") or []
+    # What the pack itself ships, so a namespaced path can be checked when it is
+    # the model's own namespace.
+    pack_textures = {item.resolve() for item in path.parents[2].glob("textures/**/*.png")}
+
+    problems: list[dict[str, Any]] = []
+    faces_checked = 0
+    for index, element in enumerate(elements):
+        for face_name, face in (element.get("faces") or {}).items():
+            if not isinstance(face, dict) or "texture" not in face:
+                continue
+            faces_checked += 1
+            value = str(face["texture"])
+            where = {"element": index, "face": face_name, "texture": value}
+            if value.startswith("#"):
+                if value[1:] not in textures:
+                    problems.append({
+                        **where,
+                        "why": "variable %r is not declared in this model's textures map "
+                               "(declared: %s)" % (value, ", ".join(sorted(textures)) or "none"),
+                    })
+                continue
+            if ":" in value:
+                # A namespaced path. Checkable when it is this pack's own texture.
+                namespace, _, rest = value.partition(":")
+                local = path.parents[2] / "textures" / (rest + ".png")
+                if namespace == (path.parents[2].name) and not local.exists() and pack_textures:
+                    problems.append({
+                        **where,
+                        "why": "namespaced path %r points at %s, which this pack does not ship"
+                               % (value, local),
+                    })
+                continue
+            if "/" in value:
+                local = path.parents[2] / "textures" / (value + ".png")
+                if not local.exists():
+                    problems.append({
+                        **where,
+                        "why": "path %r points at %s, which this pack does not ship"
+                               % (value, local),
+                    })
+                continue
+            # A bare word: the defect this function exists for. Vanilla uses bare
+            # words only as paths (`block/powder_snow`), never as variables.
+            problems.append({
+                **where,
+                "why": "a bare word is a PATH in a Minecraft model, not a variable. This "
+                       "resolves to '%s:textures/%s.png', which does not exist, so this face "
+                       "shows no texture. Write '#%s' if it means the texture key"
+                       % (path.parents[2].name, value, value),
+            })
+
+    report = {
+        "model": str(path),
+        "faces_checked": faces_checked,
+        "declared_textures": sorted(textures),
+        "problems": problems,
+        "ok": not problems,
+    }
+    if audit is not None:
+        audit["written_model"] = report
+    return report
 
 
 def render_block_spec(

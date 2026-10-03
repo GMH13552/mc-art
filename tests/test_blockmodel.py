@@ -166,3 +166,82 @@ def test_the_uv_map_artifact_explains_every_face(tmp_path: Path) -> None:
     assert "sheet" in text and "paper" in text
     assert "stretched planks" in text
     assert json.loads(Path(written["audit"]).read_text(encoding="utf-8"))["passed"] is True
+
+# -- the artifact, not the spec ----------------------------------------------
+#
+# The bug: face textures were passed through as bare words. In a Minecraft model a
+# bare word is a PATH, so every face resolved to `<ns>:textures/<key>.png`, showed
+# nothing, and the model was unusable in game. The audit stayed green because it
+# checked the SPEC's convention, and the preview stayed perfect because it reads
+# the PNGs off disk. Preview right, artifact broken.
+
+def test_the_written_model_names_its_faces_as_variables(tmp_path: Path) -> None:
+    spec = _desk_spec(tmp_path, paper_uv=[0, 0, 10, 8])
+    written = blockmodel.write_block_model(spec, tmp_path / "pack", base_dir=tmp_path)
+    document = json.loads(Path(written["model"]).read_text(encoding="utf-8"))
+    textures = [
+        face["texture"]
+        for element in document["elements"]
+        for face in (element.get("faces") or {}).values()
+    ]
+    assert textures, "the fixture should have faces"
+    for value in textures:
+        assert value.startswith("#"), (
+            "a face texture must be a #variable; %r would be read as a path and the face "
+            "would show nothing in game" % value
+        )
+        assert value[1:] in document["textures"], value
+
+
+def test_a_bare_word_face_is_refused_by_reading_the_model_back(tmp_path: Path) -> None:
+    spec = _desk_spec(tmp_path, paper_uv=[0, 0, 10, 8])
+    written = blockmodel.write_block_model(spec, tmp_path / "pack", base_dir=tmp_path)
+    model_path = Path(written["model"])
+    document = json.loads(model_path.read_text(encoding="utf-8"))
+    # Exactly what the bug produced.
+    document["elements"][0]["faces"]["up"]["texture"] = "wood"
+    model_path.write_text(json.dumps(document, indent=2), encoding="utf-8")
+
+    report = blockmodel.validate_written_model(model_path)
+    assert report["ok"] is False
+    assert report["problems"], "a bare word must be reported"
+    assert "is a PATH" in report["problems"][0]["why"]
+    assert report["problems"][0]["face"] == "up"
+
+
+def test_write_block_model_refuses_to_emit_an_illegal_model(tmp_path: Path) -> None:
+    """The check runs on generation, so the broken file cannot reach a pack."""
+    import pytest
+
+    spec = _desk_spec(tmp_path, paper_uv=[0, 0, 10, 8])
+    # A face naming a texture the spec never declares: no #variable can be made
+    # from it, so what gets written is a bare word and generation must stop.
+    spec["elements"][0]["faces"]["up"]["texture"] = "not_declared"
+    with pytest.raises(ValueError) as caught:
+        blockmodel.write_block_model(spec, tmp_path / "pack", base_dir=tmp_path)
+    assert "not a legal Minecraft model" in str(caught.value)
+
+
+def test_a_declared_resource_id_is_used_instead_of_copying(tmp_path: Path) -> None:
+    """One texture, one name: an explicit id ships nothing and claims nothing new."""
+    spec = _desk_spec(tmp_path, paper_uv=[0, 0, 10, 8])
+    spec["textures"]["wood"] = {
+        "path": spec["textures"]["wood"],
+        "id": "examplepack:block/example_planks",
+    }
+    written = blockmodel.write_block_model(spec, tmp_path / "pack", base_dir=tmp_path)
+    document = json.loads(Path(written["model"]).read_text(encoding="utf-8"))
+    assert document["textures"]["wood"] == "examplepack:block/example_planks"
+    assert not (tmp_path / "pack" / "assets" / "examplepack" / "textures" / "block" / "wood.png").exists()
+    # `wood` was referenced rather than copied; `paper` still copies, and that
+    # difference is exactly what the report records.
+    assert [item["key"] for item in written["texture_copies"]] == ["paper"]
+
+
+def test_a_renaming_copy_is_reported_rather_than_silent(tmp_path: Path) -> None:
+    """The key differs from the source name: allowed, but said out loud."""
+    spec = _desk_spec(tmp_path, paper_uv=[0, 0, 10, 8])
+    written = blockmodel.write_block_model(spec, tmp_path / "pack", base_dir=tmp_path)
+    copies = {item["key"] for item in written["texture_copies"]}
+    assert "wood" in copies, written["texture_copies"]
+    assert "RENAMED" in written["texture_copies"][0]["note"]
